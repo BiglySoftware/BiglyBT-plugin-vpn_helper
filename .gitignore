@@ -1,3 +1,12 @@
 /bin/
 /.project
 /.classpath
+/commons_logging_1.2.jar
+/httpclient_4.5.jar
+/httpcore_4.4.1.jar
+*.class
+*.zip
+*.biglybt
+*.bak
+/*.jar
+*.DS_Store

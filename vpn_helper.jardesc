@@ -1,7 +1,7 @@
-<?xml version="1.0" encoding="WINDOWS-1252" standalone="no"?>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
 <jardesc>
-    <jar path="azVPN_Helper/vpn_helper.jar"/>
-    <options buildIfNeeded="true" compress="true" descriptionLocation="/azVPN_Helper/azVPN_Helper.jardesc" exportErrors="true" exportWarnings="true" includeDirectoryEntries="false" overwrite="false" saveDescription="true" storeRefactorings="false" useSourceFolders="false"/>
+    <jar path="vpn_helper/vpn_helper.jar"/>
+    <options buildIfNeeded="true" compress="true" descriptionLocation="/vpn_helper/vpn_helper.jardesc" exportErrors="true" exportWarnings="true" includeDirectoryEntries="false" overwrite="false" saveDescription="true" storeRefactorings="false" useSourceFolders="false"/>
     <storedRefactorings deprecationInfo="true" structuralOnly="false"/>
     <selectedProjects/>
     <manifest generateManifest="true" manifestLocation="" manifestVersion="1.0" reuseManifest="false" saveManifest="false" usesManifest="true">
@@ -11,6 +11,6 @@
         </sealing>
     </manifest>
     <selectedElements exportClassFiles="true" exportJavaFiles="true" exportOutputFolder="false">
-        <javaElement handleIdentifier="=azVPN_Helper/src"/>
+        <javaElement handleIdentifier="=vpn_helper/src"/>
     </selectedElements>
 </jardesc>
