@@ -18,31 +18,37 @@
 
 package com.vuze.plugin.azVPN_Helper;
 
+import java.io.File;
 import java.lang.reflect.Field;
 import java.net.*;
 import java.util.*;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import com.biglybt.core.CoreFactory;
 import org.apache.http.client.config.RequestConfig;
 import org.apache.http.client.methods.CloseableHttpResponse;
+import org.apache.http.client.methods.HttpGet;
 import org.apache.http.client.methods.HttpHead;
+import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.impl.client.HttpClients;
 import org.apache.http.impl.conn.SystemDefaultDnsResolver;
-import com.biglybt.core.util.AESemaphore;
-import com.biglybt.core.util.Debug;
-import com.biglybt.pif.PluginConfig;
-import com.biglybt.pif.PluginInterface;
-import com.biglybt.pif.utils.*;
 
 import com.biglybt.core.Core;
+import com.biglybt.core.CoreFactory;
 import com.biglybt.core.networkmanager.admin.*;
 import com.biglybt.core.proxy.AEProxySelector;
 import com.biglybt.core.proxy.AEProxySelectorFactory;
+import com.biglybt.core.util.AESemaphore;
+import com.biglybt.core.util.Debug;
+import com.biglybt.core.util.FileUtil;
 import com.biglybt.core.util.NetUtils;
 import com.biglybt.net.udp.uc.PRUDPPacketHandler;
 import com.biglybt.net.udp.uc.PRUDPPacketHandlerFactory;
 import com.biglybt.net.udp.uc.PRUDPReleasablePacketHandler;
+
+import com.biglybt.pif.PluginConfig;
+import com.biglybt.pif.PluginInterface;
+import com.biglybt.pif.utils.*;
 
 /**
  * Common Checker class, shared amoungst azVPN_Air, azVPN_PIA, etc
@@ -169,7 +175,9 @@ public abstract class CheckerCommon
 				try {
 
 //					InetAddress ext_addr = networkAdmin.testProtocol(protocol);
-					InetAddress ext_addr = protocol.test(protocol.getType() == NetworkAdminProtocol.PT_HTTP ? null : bindTo);
+					InetAddress ext_addr = protocol.test(
+							protocol.getType() == NetworkAdminProtocol.PT_HTTP ? null
+									: bindTo);
 
 					String country = null;
 					if (ext_addr != null) {
@@ -214,7 +222,8 @@ public abstract class CheckerCommon
 		return lastProtocolAddresses;
 	}
 
-	private final boolean matchesVPNIP(InetAddress address, NetworkInterface networkInterface) {
+	private final boolean matchesVPNIP(InetAddress address,
+			NetworkInterface networkInterface) {
 		if (address == null) {
 			return false;
 		}
@@ -223,18 +232,18 @@ public abstract class CheckerCommon
 				PluginConstants.CONFIG_IGNORE_ADDRESS).split(";");
 		if (excludes != null && excludes.length > 0) {
 			String hostAddress = address.getHostAddress();
-  		for (String exclude : excludes) {
-  			if (hostAddress.equals(exclude)) {
-  				PluginVPNHelper.log(exclude + " matched and excluded");
-  				return false;
-  			}
-  		}
+			for (String exclude : excludes) {
+				if (hostAddress.equals(exclude)) {
+					PluginVPNHelper.log(exclude + " matched and excluded");
+					return false;
+				}
+			}
 		}
 
 		String regex = config.getPluginStringParameter(
 				PluginConstants.CONFIG_VPN_IP_MATCHING);
 		boolean matches = Pattern.matches(regex, address.getHostAddress());
-		
+
 		if (matches && excludes != null && excludes.length > 0) {
 			if (networkInterface == null) {
 				try {
@@ -243,16 +252,16 @@ public abstract class CheckerCommon
 				}
 			}
 			if (networkInterface != null) {
-  			String name = networkInterface.getName();
-    		for (String exclude : excludes) {
-    			if (exclude.equals(name)) {
-    				PluginVPNHelper.log(exclude + " matched and excluded");
-    				return false;
-    			}
-    		}
+				String name = networkInterface.getName();
+				for (String exclude : excludes) {
+					if (exclude.equals(name)) {
+						PluginVPNHelper.log(exclude + " matched and excluded");
+						return false;
+					}
+				}
 			}
 		}
-		
+
 		return matches;
 	}
 
@@ -264,10 +273,10 @@ public abstract class CheckerCommon
 	private final int handleFindBindingAddress(InetAddress currentBindIP,
 			StringBuilder sReply, int numLoops) {
 		if (currentBindIP == null) {
-  		addReply(sReply, CHAR_BAD, "!Bind IP null!", new String[] {
-  			"" + currentBindIP
-  		});
-  		return STATUS_ID_BAD;
+			addReply(sReply, CHAR_BAD, "!Bind IP null!", new String[] {
+				"" + currentBindIP
+			});
+			return STATUS_ID_BAD;
 		}
 
 		int newStatusID = STATUS_ID_OK;
@@ -350,8 +359,8 @@ public abstract class CheckerCommon
 							String hostAddress = address.getHostAddress();
 							BindableInterface bi = mapBindableInterfaces.get(hostAddress);
 							if (bi == null) {
-								bi = new BindableInterface(address, NetUtils.getByName(
-										networkAdminInterface.getName()));
+								bi = new BindableInterface(address,
+										NetUtils.getByName(networkAdminInterface.getName()));
 								mapBindableInterfaces.put(hostAddress, bi);
 								if (!foundExistingVPNIP && address.equals(vpnIP)) {
 									foundExistingVPNIP = true;
@@ -361,7 +370,7 @@ public abstract class CheckerCommon
 					}
 				}
 			}
-			
+
 			if (vpnIP != null && !foundExistingVPNIP) {
 				String niName = "Unknown Interface";
 				try {
@@ -371,17 +380,19 @@ public abstract class CheckerCommon
 							+ networkInterface.getDisplayName() + ")";
 				} catch (Throwable e) {
 				}
-				addReply(sReply, CHAR_WARN, "vpnhelper.existing.not.found", new String[] {
-					"" + currentBindIP,
-					niName
-				});
+				addReply(sReply, CHAR_WARN, "vpnhelper.existing.not.found",
+						new String[] {
+							"" + currentBindIP,
+							niName
+						});
 
 				if (numLoops == 0) {
-  				try {
-  					Field fldLastNICheck = NetUtils.class.getDeclaredField("last_ni_check");
-  					fldLastNICheck.setAccessible(true);
-  					fldLastNICheck.set(null, Long.valueOf(-1));
-  					return handleFindBindingAddress(currentBindIP, sReply, ++numLoops);
+					try {
+						Field fldLastNICheck = NetUtils.class.getDeclaredField(
+								"last_ni_check");
+						fldLastNICheck.setAccessible(true);
+						fldLastNICheck.set(null, Long.valueOf(-1));
+						return handleFindBindingAddress(currentBindIP, sReply, ++numLoops);
 					} catch (Throwable t) {
 						t.printStackTrace();
 					}
@@ -402,7 +413,7 @@ public abstract class CheckerCommon
 												+ bi.networkInterface.getDisplayName() + ")",
 								"" + bi.networkPrefixLength,
 								"" + minSubnetMaskBitCount
-					});
+							});
 				} else if (bi.canReach) {
 					addReply(sReply, CHAR_GOOD, "vpnhelper.found.bindable.vpn",
 							new String[] {
@@ -410,7 +421,7 @@ public abstract class CheckerCommon
 								bi.networkInterface == null ? "null"
 										: bi.networkInterface.getName() + " ("
 												+ bi.networkInterface.getDisplayName() + ")"
-					});
+							});
 				} else {
 					addReply(sReply, CHAR_WARN, "vpnhelper.not.reachable", new String[] {
 						"" + bi.address,
@@ -447,7 +458,7 @@ public abstract class CheckerCommon
 							"" + localAddress,
 							networkInterface == null ? "null" : networkInterface.getName()
 									+ " (" + networkInterface.getDisplayName() + ")"
-				});
+						});
 
 				if ((localAddress instanceof Inet4Address)
 						&& matchesVPNIP(localAddress, networkInterface)) {
@@ -467,7 +478,7 @@ public abstract class CheckerCommon
 														+ networkInterface.getDisplayName() + ")",
 										"" + networkPrefixLength,
 										"" + minSubnetMaskBitCount
-							});
+									});
 						} else if (!canReach(localAddress)) {
 							addReply(sReply, CHAR_WARN, "vpnhelper.not.reachable",
 									new String[] {
@@ -475,7 +486,7 @@ public abstract class CheckerCommon
 										networkInterface == null ? "null"
 												: networkInterface.getName() + " ("
 														+ networkInterface.getDisplayName() + ")"
-							});
+									});
 						} else {
 							newBind = new BindableInterface(localAddress, networkInterface);
 
@@ -548,15 +559,17 @@ public abstract class CheckerCommon
 								? ".existing.bind.kept.loopback" : ".existing.bind.kept"),
 						new String[] {
 							configBindIP
-				});
+						});
 
 				if (currentBindIP.isLoopbackAddress()) {
 					if (numLoops == 0) {
-	  				try {
-	  					Field fldLastNICheck = NetUtils.class.getDeclaredField("last_ni_check");
-	  					fldLastNICheck.setAccessible(true);
-	  					fldLastNICheck.set(null, Long.valueOf(-1));
-	  					return handleFindBindingAddress(currentBindIP, sReply, ++numLoops);
+						try {
+							Field fldLastNICheck = NetUtils.class.getDeclaredField(
+									"last_ni_check");
+							fldLastNICheck.setAccessible(true);
+							fldLastNICheck.set(null, Long.valueOf(-1));
+							return handleFindBindingAddress(currentBindIP, sReply,
+									++numLoops);
 						} catch (Throwable t) {
 							t.printStackTrace();
 						}
@@ -662,7 +675,7 @@ public abstract class CheckerCommon
 	}
 
 	protected final void addReply(StringBuilder sReply, char prefix, String id,
-			String[] params) {
+			String... params) {
 		String s = (prefix == 0 ? "" : prefix + " ")
 				+ (texts == null ? "!" + id + "!" + Arrays.toString(params)
 						: texts.getLocalisedMessageText(id, params));
@@ -675,7 +688,7 @@ public abstract class CheckerCommon
 	}
 
 	protected final void changePort(int port, StringBuilder sReply) {
-
+		boolean changed = false;
 		PluginConfig pluginConfig = pi.getPluginconfig();
 		int coreTCPPort = pluginConfig.getCoreIntParameter(
 				PluginConfig.CORE_PARAM_INT_INCOMING_TCP_PORT);
@@ -684,20 +697,20 @@ public abstract class CheckerCommon
 		if (coreTCPPort != port) {
 			pluginConfig.setCoreIntParameter(
 					PluginConfig.CORE_PARAM_INT_INCOMING_TCP_PORT, port);
-			addReply(sReply, CHAR_GOOD, "vpnhelper.changed.port", new String[] {
-				"TCP",
-				Integer.toString(coreTCPPort),
-				Integer.toString(port)
-			});
+			addReply(sReply, CHAR_GOOD, "vpnhelper.changed.port", "TCP",
+					Integer.toString(coreTCPPort), Integer.toString(port));
+			changed = true;
 		}
 		if (coreUDPPort != port) {
 			pluginConfig.setCoreIntParameter(
 					PluginConfig.CORE_PARAM_INT_INCOMING_UDP_PORT, port);
-			addReply(sReply, CHAR_GOOD, "vpnhelper.changed.port", new String[] {
-				"UDP",
-				Integer.toString(coreUDPPort),
-				Integer.toString(port)
-			});
+			addReply(sReply, CHAR_GOOD, "vpnhelper.changed.port", "UDP",
+					Integer.toString(coreUDPPort), Integer.toString(port));
+			changed = true;
+		}
+		if (!changed) {
+			addReply(sReply, CHAR_GOOD, "vpnhelper.port.already.set",
+					Integer.toString(port));
 		}
 	}
 
@@ -761,16 +774,30 @@ public abstract class CheckerCommon
 					PluginConstants.CONFIG_DO_PORT_FORWARDING);
 
 			if (doPortForwarding) {
-				boolean rpcCalled = false;
-				if (newStatusID != STATUS_ID_BAD && vpnIP != null) {
-					rpcCalled = callRPCforPort(vpnIP, sReply);
+
+				boolean callRPC = true;
+				String portReadLocation = config.getPluginStringParameter(
+						PluginConstants.CONFIG_PORT_READ_LOCATION);
+				if (!portReadLocation.isEmpty()) {
+					String portReadLocationRegex = config.getPluginStringParameter(
+							PluginConstants.CONFIG_PORT_READ_LOCATION_REGEX);
+					callRPC = !getPortFromLocationLocation(portReadLocation,
+							portReadLocationRegex, sReply);
 				}
 
-				if (!rpcCalled) {
-					if (newStatusID != STATUS_ID_BAD) {
-						newStatusID = STATUS_ID_WARN;
+				if (callRPC) {
+					boolean rpcCalled = false;
+					if (newStatusID != STATUS_ID_BAD && vpnIP != null) {
+						rpcCalled = callRPCforPort(vpnIP, sReply);
+					}
 
-						addReply(sReply, CHAR_WARN, "vpnhelper.port.forwarding.get.failed");
+					if (!rpcCalled) {
+						if (newStatusID != STATUS_ID_BAD) {
+							newStatusID = STATUS_ID_WARN;
+
+							addReply(sReply, CHAR_WARN,
+									"vpnhelper.port.forwarding.get.failed");
+						}
 					}
 				}
 			}
@@ -812,6 +839,84 @@ public abstract class CheckerCommon
 		return lastPortCheckStatus;
 	}
 
+	private boolean getPortFromLocationLocation(String location, String regex,
+			StringBuilder sReply) {
+		String textToParse = null;
+		boolean warned = false;
+		if (location.startsWith("http")) {
+			try {
+				HttpGet getLoginPage = new HttpGet(location);
+				RequestConfig requestConfig = RequestConfig.custom().setLocalAddress(
+						vpnIP).setConnectTimeout(15000).build();
+				getLoginPage.setConfig(requestConfig);
+
+				CloseableHttpClient httpClientLoginPage = HttpClients.createDefault();
+				CloseableHttpResponse loginPageResponse = httpClientLoginPage.execute(
+						getLoginPage);
+
+				textToParse = FileUtil.readInputStreamAsString(
+						loginPageResponse.getEntity().getContent(), -1, "utf8");
+
+			} catch (Throwable t) {
+				addReply(sReply, CHAR_WARN, "vpnhelper.port.from.location.failed",
+						location, t.toString());
+				warned = true;
+			}
+		}
+		if (textToParse == null) {
+			File file = new File(location);
+			if (file.isFile()) {
+				try {
+					textToParse = FileUtil.readFileAsString(file, -1, "utf8");
+				} catch (Throwable t) {
+					addReply(sReply, CHAR_WARN, "vpnhelper.port.from.location.failed",
+							location, t.toString());
+				}
+			}
+		}
+
+		if (textToParse != null) {
+			try {
+				String portString;
+				if (regex.isEmpty()) {
+					portString = textToParse;
+				} else {
+					Pattern pat = Pattern.compile(regex);
+					Matcher matcher = pat.matcher(textToParse);
+					if (matcher.find()) {
+						if (matcher.groupCount() > 0) {
+							portString = matcher.group(1);
+						} else {
+							portString = regex.substring(matcher.start(), matcher.end());
+						}
+					} else {
+						addReply(sReply, CHAR_WARN, "vpnhelper.port.from.location.failed",
+								location, "No matching port string matching '" + regex
+										+ " from " + textToParse);
+						return false;
+					}
+				}
+
+				int port = Integer.parseInt(portString);
+				if (port > 0) {
+					changePort(port, sReply);
+					return true;
+				}
+
+			} catch (Throwable t) {
+				addReply(sReply, CHAR_WARN, "vpnhelper.port.from.location.failed",
+						location, t.toString());
+				warned = true;
+			}
+		}
+
+		if (!warned) {
+			addReply(sReply, CHAR_WARN, "vpnhelper.port.from.location.failed", location,
+					"Can't Find");
+		}
+		return false;
+	}
+
 	protected abstract boolean callRPCforPort(InetAddress vpnIP,
 			StringBuilder sReply);
 
@@ -846,6 +951,8 @@ public abstract class CheckerCommon
 			response.close();
 
 		} catch (Throwable t) {
+			PluginVPNHelper.log("Trying to access " + uri + " on " + addressToReach
+					+ " caused " + t.toString());
 			t.printStackTrace();
 			return false;
 		} finally {

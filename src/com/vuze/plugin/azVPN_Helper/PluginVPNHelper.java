@@ -18,12 +18,13 @@
 
 package com.vuze.plugin.azVPN_Helper;
 
-import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.*;
 
-import com.biglybt.core.internat.IntegratedResourceBundle;
+import com.biglybt.core.config.COConfigurationManager;
 import com.biglybt.core.util.AERunnable;
+import com.biglybt.ui.swt.pif.UISWTInstance;
+
 import com.biglybt.pif.PluginException;
 import com.biglybt.pif.PluginInterface;
 import com.biglybt.pif.PluginListener;
@@ -38,7 +39,6 @@ import com.biglybt.pif.ui.config.*;
 import com.biglybt.pif.ui.model.BasicPluginConfigModel;
 import com.biglybt.pif.ui.model.BasicPluginViewModel;
 import com.biglybt.pif.utils.LocaleUtilities;
-import com.biglybt.ui.swt.pif.UISWTInstance;
 
 public class PluginVPNHelper
 	implements UnloadablePlugin, UIManagerListener, PluginListener
@@ -127,13 +127,18 @@ public class PluginVPNHelper
 			});
 		}
 
-		for (String vpnID : vpnIDs) {
+		String[] longNames = new String[vpnIDs.length];
+		System.arraycopy(vpnIDs, 0, longNames, 0, longNames.length);
+
+		for (int i = 0; i < vpnIDs.length; i++) {
+			String vpnID = vpnIDs[i];
 			if (vpnID.length() == 0) {
 				continue;
 			}
+
 			try {
 				i18n.integrateLocalisedMessageBundle(
-						"com.vuze.plugin.azVPN_Helper.internat.Messages_" + vpnID);
+						"com.vuze.plugin.azVPN_Helper.internat." + vpnID + "_Messages");
 
 				Class<?> checkerCla = Class.forName(
 						"com.vuze.plugin.azVPN_Helper.Checker_" + vpnID);
@@ -147,8 +152,29 @@ public class PluginVPNHelper
 
 				boolean visible = vpnID.equals(checkerID);
 				if (listParams != null && listParams.size() > 0) {
+					ActionParameter paramReset = configModel.addActionParameter2(null,
+							"vpnhelper.config.reset.one");
+					paramReset.addListener(param -> {
+						for (Parameter configParameter : listParams) {
+							String name = configParameter.getConfigKeyName();
+							if (name != null && name.length() > 0) {
+								COConfigurationManager.removeParameter(name);
+							}
+						}
+					});
+					listParams.add(paramReset);
 
-					ParameterGroup group = configModel.createGroup("!" + vpnID + "!",
+					String idLongName = "vpnhelper.name." + vpnID.toLowerCase();
+					String groupName;
+					boolean hasLongName = i18n.hasLocalisedMessageText(idLongName);
+					if (hasLongName) {
+						longNames[i] = i18n.getLocalisedMessageText(idLongName);
+						groupName = "!" + longNames[i] + "!";
+					} else {
+						groupName = "!" + vpnID + "!";
+					}
+
+					ParameterGroup group = configModel.createGroup(groupName,
 							listParams.toArray(new Parameter[0]));
 					tabFolder.addTab(group);
 
@@ -156,6 +182,7 @@ public class PluginVPNHelper
 						//configParameter.setVisible(visible);
 						configParameter.setEnabled(visible);
 					}
+
 				}
 
 				mapVPNConfigParams.put(vpnID, listParams);
@@ -164,6 +191,7 @@ public class PluginVPNHelper
 				e.printStackTrace();
 			}
 		}
+		currentVPN.setLabels(longNames);
 
 		i18n.integrateLocalisedMessageBundle(
 				"com.vuze.plugin.azVPN_Helper.internat.Messages");
@@ -171,7 +199,7 @@ public class PluginVPNHelper
 		String vpnID = currentVPN.getValue();
 		if (vpnID.length() > 0) {
 			i18n.integrateLocalisedMessageBundle(
-					"com.vuze.plugin.azVPN_Helper.internat.Messages_" + vpnID);
+					"com.vuze.plugin.azVPN_Helper.internat." + vpnID + "_Messages");
 
 			try {
 				Class<?> checkerCla = Class.forName(
@@ -240,7 +268,7 @@ public class PluginVPNHelper
 				String vpnID = currentVPN.getValue();
 				if (vpnID.length() > 0) {
 					i18n.integrateLocalisedMessageBundle(
-							"com.vuze.plugin.azVPN_Helper.internat.Messages_" + vpnID);
+							"com.vuze.plugin.azVPN_Helper.internat." + vpnID + "_Messages");
 
 					try {
 						Class<?> checkerCla = Class.forName(
@@ -297,7 +325,8 @@ public class PluginVPNHelper
 			}
 		});
 
-		configModel.addBooleanParameter2(PluginConstants.CONFIG_DO_PORT_FORWARDING,
+		BooleanParameter paramDoPortForwarding = configModel.addBooleanParameter2(
+				PluginConstants.CONFIG_DO_PORT_FORWARDING,
 				PluginConstants.CONFIG_DO_PORT_FORWARDING, true);
 
 		StringParameter paramRegex = configModel.addStringParameter2(
@@ -305,13 +334,34 @@ public class PluginVPNHelper
 				PluginConstants.CONFIG_VPN_IP_MATCHING, DEFAULT_VPN_IP_REGEX);
 		paramRegex.setMinimumRequiredUserMode(StringParameter.MODE_ADVANCED);
 
-
 		StringParameter paramIgnoreAddress = configModel.addStringParameter2(
 				PluginConstants.CONFIG_IGNORE_ADDRESS,
 				PluginConstants.CONFIG_IGNORE_ADDRESS, "");
-		paramIgnoreAddress.setMinimumRequiredUserMode(StringParameter.MODE_ADVANCED);
+		paramIgnoreAddress.setMinimumRequiredUserMode(
+				StringParameter.MODE_ADVANCED);
 
 		mapVPNConfigParams = new HashMap<String, List<Parameter>>(1);
+
+		DirectoryParameter paramPortReadLocation = configModel.addDirectoryParameter2(
+				PluginConstants.CONFIG_PORT_READ_LOCATION,
+				PluginConstants.CONFIG_PORT_READ_LOCATION, "");
+		paramPortReadLocation.setMinimumRequiredUserMode(
+				StringParameter.MODE_INTERMEDIATE);
+		paramDoPortForwarding.addEnabledOnSelection(paramPortReadLocation);
+
+		StringParameter paramPortReadLocationRegEx = configModel.addStringParameter2(
+				PluginConstants.CONFIG_PORT_READ_LOCATION_REGEX,
+				PluginConstants.CONFIG_PORT_READ_LOCATION_REGEX,
+				"[^0-9]*([0-9]{3,5})[^0-9]?");
+		paramPortReadLocation.setMinimumRequiredUserMode(
+				StringParameter.MODE_INTERMEDIATE);
+
+		paramPortReadLocation.addListener(param -> {
+			String value = ((DirectoryParameter) param).getValue();
+			paramPortReadLocationRegEx.setEnabled(!value.isEmpty());
+		});
+		paramPortReadLocationRegEx.setEnabled(
+				!paramPortReadLocation.getValue().isEmpty());
 
 		tabFolder = configModel.createTabFolder();
 	}

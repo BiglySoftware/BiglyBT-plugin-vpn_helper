@@ -31,6 +31,10 @@ public class PluginConstants
 
 	public static final String CONFIG_DO_PORT_FORWARDING = "vpn.port.forwarding";
 
+	public static final String CONFIG_PORT_READ_LOCATION = "vpn.port.read.location";
+
+	public static final String CONFIG_PORT_READ_LOCATION_REGEX = "vpn.port.read.location.regex";
+
 	public static final String CONFIG_P = "p.privx";
 
 	public static final String CONFIG_USER = "user";
