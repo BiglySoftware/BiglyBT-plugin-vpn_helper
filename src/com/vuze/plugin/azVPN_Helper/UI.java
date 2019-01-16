@@ -34,7 +34,6 @@ import com.biglybt.ui.swt.pif.UISWTInstance;
 
 import com.biglybt.ui.UIFunctionsManager;
 import com.biglybt.ui.common.viewtitleinfo.ViewTitleInfo;
-import com.biglybt.ui.common.viewtitleinfo.ViewTitleInfoManager;
 import com.biglybt.ui.mdi.MdiEntry;
 import com.biglybt.ui.mdi.MdiEntryCreationListener;
 import com.biglybt.ui.mdi.MultipleDocumentInterface;
@@ -51,7 +50,7 @@ public class UI
 
 	private MenuItem menuItemShowView;
 
-	private ViewTitleInfo viewTitleInfo;
+	private MdiEntry mdiEntry;
 
 	public UI(PluginInterface pi, UISWTInstance swtInstance) {
 		this.pi = pi;
@@ -112,11 +111,11 @@ public class UI
 	@Override
 	public MdiEntry createMDiEntry(String id) {
 		final MultipleDocumentInterface mdi = UIFunctionsManager.getUIFunctions().getMDI();
-		MdiEntry entry = mdi.createEntryFromSkinRef(null, VIEW_ID, "vpnhelperview",
+		mdiEntry = mdi.createEntryFromSkinRef(null, VIEW_ID, "vpnhelperview",
 				"VPNHelper", null, null, true, null);
-		entry.setTitleID("vpnhelper.sidebar.title");
+		mdiEntry.setTitleID("vpnhelper.sidebar.title");
 
-		viewTitleInfo = new ViewTitleInfo() {
+		ViewTitleInfo viewTitleInfo = new ViewTitleInfo() {
 			@Override
 			public Object getTitleInfoProperty(int propertyID) {
 				if (propertyID == ViewTitleInfo.TITLE_INDICATOR_TEXT) {
@@ -148,24 +147,24 @@ public class UI
 							: PluginVPNHelper.instance.checker.getCurrentStatusID();
 
 					if (statusID == CheckerCommon.STATUS_ID_OK) {
-						return new int[] {
-							0,
-							80,
-							0
+						return new int[]{
+								0,
+								80,
+								0
 						};
 					}
 					if (statusID == CheckerCommon.STATUS_ID_BAD) {
-						return new int[] {
-							128,
-							30,
-							30
+						return new int[]{
+								128,
+								30,
+								30
 						};
 					}
 					if (statusID == CheckerCommon.STATUS_ID_WARN) {
-						return new int[] {
-							255,
-							140,
-							0
+						return new int[]{
+								255,
+								140,
+								0
 						};
 					}
 					return null;
@@ -174,9 +173,9 @@ public class UI
 			}
 		};
 
-		entry.setViewTitleInfo(viewTitleInfo);
+		mdiEntry.setViewTitleInfo(viewTitleInfo);
 
-		return entry;
+		return mdiEntry;
 	}
 
 	private void addSkinPaths() {
@@ -206,7 +205,9 @@ public class UI
 
 	@Override
 	public void portCheckStatusChanged(String status) {
-		ViewTitleInfoManager.refreshTitleInfo(viewTitleInfo);
+		if (mdiEntry != null) {
+			mdiEntry.redraw();
+		}
 	}
 
 	@Override
@@ -215,6 +216,8 @@ public class UI
 
 	@Override
 	public void checkerChanged(CheckerCommon checker) {
-		ViewTitleInfoManager.refreshTitleInfo(viewTitleInfo);
+		if (mdiEntry != null) {
+			mdiEntry.redraw();
+		}
 	}
 }
