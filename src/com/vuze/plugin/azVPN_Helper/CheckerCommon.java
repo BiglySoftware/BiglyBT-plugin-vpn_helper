@@ -92,6 +92,11 @@ public abstract class CheckerCommon
 	public CheckerCommon() {
 	}
 
+	static {
+		System.setProperty("org.apache.commons.logging.Log",
+				"org.apache.commons.logging.impl.NoOpLog");
+	}
+	
 	public CheckerCommon(PluginInterface pi) {
 		this.pi = pi;
 		this.config = pi.getPluginconfig();
