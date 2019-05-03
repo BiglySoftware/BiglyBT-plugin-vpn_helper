@@ -85,9 +85,23 @@ public abstract class CheckerCommon
 
 	protected InetAddress vpnIP;
 
-	protected int currentStatusID = -1;
+	protected Status currentStatus = new Status(-1);
 
 	private int minSubnetMaskBitCount = -1;
+
+	public static class Status {
+		public int statusID;
+		String indicatorID = null;
+
+		public Status(int statusID) {
+			this.statusID = statusID;
+		}
+
+		public Status(int statusID, String indicatorID) {
+			this.statusID = statusID;
+			this.indicatorID = indicatorID;
+		}
+	}
 
 	public CheckerCommon() {
 	}
@@ -719,12 +733,12 @@ public abstract class CheckerCommon
 		}
 	}
 
-	public final int getCurrentStatusID() {
-		return currentStatusID;
+	public final Status getCurrentStatus() {
+		return currentStatus;
 	}
 
-	protected final int findBindingAddress(StringBuilder sReply) {
-		int newStatusID = -1;
+	protected final Status findBindingAddress(StringBuilder sReply) {
+		Status newStatus;
 
 		// Find our VPN binding (interface) address.  Checking UDP is the best bet,
 		// since TCP and http might be proxied
@@ -738,7 +752,7 @@ public abstract class CheckerCommon
 		if (handlers.size() == 0) {
 			addLiteralReply(sReply, CHAR_BAD + " No UDP Handlers");
 
-			newStatusID = STATUS_ID_BAD;
+			newStatus = new Status(STATUS_ID_BAD);
 		} else {
 
 			InetAddress currentBindIP = null;
@@ -748,9 +762,9 @@ public abstract class CheckerCommon
 					break;
 				}
 			}
-			newStatusID = handleFindBindingAddress(currentBindIP, sReply);
+			newStatus = new Status(handleFindBindingAddress(currentBindIP, sReply));
 		}
-		return newStatusID;
+		return newStatus;
 	}
 
 	public final String portBindingCheck() {
@@ -773,7 +787,7 @@ public abstract class CheckerCommon
 		StringBuilder sReply = new StringBuilder();
 
 		try {
-			int newStatusID = findBindingAddress(sReply);
+			Status newStatus = findBindingAddress(sReply);
 
 			boolean doPortForwarding = config.getPluginBooleanParameter(
 					PluginConstants.CONFIG_DO_PORT_FORWARDING);
@@ -791,15 +805,15 @@ public abstract class CheckerCommon
 				}
 
 				if (callRPC) {
-					boolean rpcCalled = false;
-					if (newStatusID != STATUS_ID_BAD && vpnIP != null) {
-						rpcCalled = callRPCforPort(vpnIP, sReply);
+					Status rpcCallResult = null;
+					if (newStatus.statusID != STATUS_ID_BAD && vpnIP != null) {
+						rpcCallResult = callRPCforPort(vpnIP, sReply);
 					}
 
-					if (!rpcCalled) {
-						if (newStatusID != STATUS_ID_BAD) {
-							newStatusID = STATUS_ID_WARN;
+					if (rpcCallResult != null) {
+						newStatus = rpcCallResult;
 
+						if (newStatus.statusID == STATUS_ID_WARN) {
 							addReply(sReply, CHAR_WARN,
 									"vpnhelper.port.forwarding.get.failed");
 						}
@@ -807,16 +821,20 @@ public abstract class CheckerCommon
 				}
 			}
 
-			if (newStatusID != -1) {
-				currentStatusID = newStatusID;
+			if (newStatus.statusID != -1) {
+				currentStatus = newStatus;
 			}
 			String msgID = null;
-			if (newStatusID == STATUS_ID_BAD) {
-				msgID = "vpnhelper.topline.bad";
-			} else if (newStatusID == STATUS_ID_OK) {
-				msgID = "vpnhelper.topline.ok";
-			} else if (newStatusID == STATUS_ID_WARN) {
-				msgID = "vpnhelper.topline.warn";
+			switch (newStatus.statusID) {
+				case STATUS_ID_BAD:
+					msgID = "vpnhelper.topline.bad";
+					break;
+				case STATUS_ID_OK:
+					msgID = "vpnhelper.topline.ok";
+					break;
+				case STATUS_ID_WARN:
+					msgID = "vpnhelper.topline.warn";
+					break;
 			}
 			if (msgID != null) {
 				sReply.insert(0, texts.getLocalisedMessageText(msgID) + "\n");
@@ -922,7 +940,7 @@ public abstract class CheckerCommon
 		return false;
 	}
 
-	protected abstract boolean callRPCforPort(InetAddress vpnIP,
+	protected abstract Status callRPCforPort(InetAddress vpnIP,
 			StringBuilder sReply);
 
 	protected abstract boolean canReach(InetAddress addressToReach);

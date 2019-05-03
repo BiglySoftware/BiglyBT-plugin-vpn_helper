@@ -39,6 +39,7 @@ import com.biglybt.ui.mdi.MdiEntryCreationListener;
 import com.biglybt.ui.mdi.MultipleDocumentInterface;
 import com.biglybt.ui.swt.skin.SWTSkinFactory;
 import com.biglybt.ui.swt.skin.SWTSkinProperties;
+import com.vuze.plugin.azVPN_Helper.CheckerCommon.Status;
 
 public class UI
 	implements MdiEntryCreationListener, CheckerListener
@@ -119,19 +120,23 @@ public class UI
 			@Override
 			public Object getTitleInfoProperty(int propertyID) {
 				if (propertyID == ViewTitleInfo.TITLE_INDICATOR_TEXT) {
-					int statusID = PluginVPNHelper.instance.checker == null
-							? CheckerCommon.STATUS_ID_WARN
-							: PluginVPNHelper.instance.checker.getCurrentStatusID();
+					Status status = PluginVPNHelper.instance.checker == null
+							? new Status(CheckerCommon.STATUS_ID_WARN)
+							: PluginVPNHelper.instance.checker.getCurrentStatus();
 
 					LocaleUtilities texts = UI.this.pi.getUtilities().getLocaleUtilities();
 
-					if (statusID == CheckerCommon.STATUS_ID_OK) {
+					if (status.indicatorID != null) {
+						return texts.getLocalisedMessageText("vpnhelper.indicator." + status.indicatorID);
+					}
+
+					if (status.statusID == CheckerCommon.STATUS_ID_OK) {
 						return texts.getLocalisedMessageText("vpnhelper.indicator.ok");
 					}
-					if (statusID == CheckerCommon.STATUS_ID_BAD) {
+					if (status.statusID == CheckerCommon.STATUS_ID_BAD) {
 						return texts.getLocalisedMessageText("vpnhelper.indicator.bad");
 					}
-					if (statusID == CheckerCommon.STATUS_ID_WARN) {
+					if (status.statusID == CheckerCommon.STATUS_ID_WARN) {
 						return texts.getLocalisedMessageText("vpnhelper.indicator.warn");
 					}
 					return null;
@@ -144,7 +149,7 @@ public class UI
 				if (propertyID == ViewTitleInfo.TITLE_INDICATOR_COLOR) {
 					int statusID = PluginVPNHelper.instance.checker == null
 							? CheckerCommon.STATUS_ID_WARN
-							: PluginVPNHelper.instance.checker.getCurrentStatusID();
+							: PluginVPNHelper.instance.checker.getCurrentStatus().statusID;
 
 					if (statusID == CheckerCommon.STATUS_ID_OK) {
 						return new int[]{

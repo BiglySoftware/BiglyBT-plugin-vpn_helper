@@ -93,7 +93,7 @@ public class Checker_Mullvad
 	}
 
 	@Override
-	protected boolean callRPCforPort(InetAddress bindIP, StringBuilder sReply) {
+	protected Status callRPCforPort(InetAddress bindIP, StringBuilder sReply) {
 		String id = config.getPluginStringParameter(CONFIG_MULLVAD_ACCOUNT);
 		if (id == null || id.length() == 0) {
 			// It's possible the user started Vuze before getting an account id,
@@ -101,7 +101,7 @@ public class Checker_Mullvad
 			id = getAccountID();
 			if (id == null || id.length() == 0) {
 				addReply(sReply, CHAR_WARN, "mullvad.account.id.required");
-  			return false;
+				return new Status(STATUS_ID_WARN);
 			}
 		}
 
@@ -150,7 +150,7 @@ public class Checker_Mullvad
 					answer.toString()
 				});
 
-				return false;
+				return new Status(STATUS_ID_WARN);
 			}
 		} catch (Exception e) {
 			e.printStackTrace();
@@ -158,7 +158,7 @@ public class Checker_Mullvad
 				bindIP + ": " + e.getMessage()
 			});
 
-			return false;
+			return new Status(STATUS_ID_WARN);
 		} finally {
 			AEProxySelector selector = AEProxySelectorFactory.getSelector();
 			if (selector != null && resolve != null) {
@@ -168,7 +168,7 @@ public class Checker_Mullvad
 				}
 			}
 		}
-		return true;
+		return new Status(STATUS_ID_OK);
 	}
 
 	private int addPort(String id)

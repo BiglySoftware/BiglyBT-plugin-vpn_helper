@@ -203,7 +203,7 @@ public class Checker_AirVPN
 	}
 
 	@Override
-	protected boolean callRPCforPort(InetAddress bindIP, StringBuilder sReply) {
+	protected Status callRPCforPort(InetAddress bindIP, StringBuilder sReply) {
 		InetAddress[] resolve = null;
 		try {
 
@@ -220,7 +220,7 @@ public class Checker_AirVPN
 			if (user == null || user.length() == 0 || pass == null
 					|| pass.length() == 0) {
 				addReply(sReply, CHAR_WARN, "airvpn.rpc.nocreds");
-				return false;
+				return new Status(STATUS_ID_WARN);
 			}
 
 			// If Vuze has a proxy set up (Tools->Options->Connection->Proxy), then
@@ -256,7 +256,7 @@ public class Checker_AirVPN
 					
 					if (ports == null) {
 						addReply(sReply, CHAR_WARN, "airvpn.vpnhelper.rpc.notconnected");
-						return false;
+						return new Status(STATUS_ID_WARN);
 					}
 				} else {
 					ports = null;
@@ -317,7 +317,7 @@ public class Checker_AirVPN
 				}
 				if (authKey == null) {
 					addReply(sReply, CHAR_WARN, "vpnhelper.rpc.noauthkey");
-					return false;
+					return new Status(STATUS_ID_WARN);
 				}
 
 				loginURL = UrlUtils.unescapeXML(loginURL);
@@ -372,7 +372,7 @@ public class Checker_AirVPN
 				ports = scrapePorts(bindIP, token);
 				if (ports == null && token.length() > 0) {
 					addReply(sReply, CHAR_WARN, "airvpn.vpnhelper.rpc.notconnected");
-					return false;
+					return new Status(STATUS_ID_WARN);
 				}
 			}
 
@@ -384,7 +384,7 @@ public class Checker_AirVPN
 						new String[] {
 							ports[existingIndex].port
 				});
-				return true;
+				return new Status(STATUS_ID_OK);
 			}
 
 			boolean gotPort = false;
@@ -420,7 +420,7 @@ public class Checker_AirVPN
 							new String[] {
 								ports[existingIndex].port
 					});
-					return true;
+					return new Status(STATUS_ID_OK);
 				}
 
 				if ((ports.length > 0 && ports[0].ourBinding) || ports.length == 20) {
@@ -441,7 +441,7 @@ public class Checker_AirVPN
 					bindIP.toString()
 				});
 
-				return false;
+				return new Status(STATUS_ID_WARN);
 			}
 		} catch (Exception e) {
 			e.printStackTrace();
@@ -449,7 +449,7 @@ public class Checker_AirVPN
 				bindIP + ": " + e.getMessage()
 			});
 
-			return false;
+			return new Status(STATUS_ID_WARN);
 		} finally {
 			AEProxySelector selector = AEProxySelectorFactory.getSelector();
 			if (selector != null && resolve != null) {
@@ -459,7 +459,7 @@ public class Checker_AirVPN
 				}
 			}
 		}
-		return true;
+		return new Status(STATUS_ID_OK);
 	}
 
 	private PortInfo[] createPort(InetAddress bindIP, StringBuffer token)
