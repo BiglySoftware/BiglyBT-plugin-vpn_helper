@@ -67,50 +67,27 @@ public abstract class CheckerCommon
 
 	protected static final int STATUS_ID_WARN = 2;
 
-	protected UTTimer timer;
-
-	public PluginConfig config;
-
-	public PluginInterface pi;
-
-	protected String lastProtocolAddresses = "";
-
-	protected String lastPortCheckStatus = "";
-
-	protected boolean checkingPortBinding;
-
-	protected LocaleUtilities texts;
-
-	protected InetAddress testSocketAddress;
-
-	protected InetAddress vpnIP;
-
-	protected Status currentStatus = new Status(-1);
-
-	private int minSubnetMaskBitCount = -1;
-
-	public static class Status {
-		public int statusID;
-		String indicatorID = null;
-
-		public Status(int statusID) {
-			this.statusID = statusID;
-		}
-
-		public Status(int statusID, String indicatorID) {
-			this.statusID = statusID;
-			this.indicatorID = indicatorID;
-		}
-	}
-
-	public CheckerCommon() {
-	}
-
 	static {
 		System.setProperty("org.apache.commons.logging.Log",
 				"org.apache.commons.logging.impl.NoOpLog");
 	}
-	
+
+	public PluginConfig config;
+
+	public PluginInterface pi;
+	protected UTTimer timer;
+	protected String lastProtocolAddresses = "";
+	protected String lastPortCheckStatus = "";
+	protected boolean checkingPortBinding;
+	protected LocaleUtilities texts;
+	protected InetAddress testSocketAddress;
+	protected InetAddress vpnIP;
+	protected Status currentStatus = new Status(-1);
+	private int minSubnetMaskBitCount = -1;
+
+	public CheckerCommon() {
+	}
+
 	public CheckerCommon(PluginInterface pi) {
 		this.pi = pi;
 		this.config = pi.getPluginconfig();
@@ -934,8 +911,8 @@ public abstract class CheckerCommon
 		}
 
 		if (!warned) {
-			addReply(sReply, CHAR_WARN, "vpnhelper.port.from.location.failed", location,
-					"Can't Find");
+			addReply(sReply, CHAR_WARN, "vpnhelper.port.from.location.failed",
+					location, "Can't Find");
 		}
 		return false;
 	}
@@ -1013,6 +990,46 @@ public abstract class CheckerCommon
 			}
 		}
 		return networkPrefixLength;
+	}
+
+	public static class Status
+	{
+		public int statusID;
+
+		String indicatorID = null;
+
+		String indicatorTooltipID = null;
+
+		public Status(int statusID) {
+			this.statusID = statusID;
+		}
+
+		public Status(int statusID, String indicatorID) {
+			this.statusID = statusID;
+			this.indicatorID = indicatorID;
+		}
+
+		public String getIndicatorTooltipKey() {
+			if (indicatorTooltipID != null) {
+				return indicatorTooltipID;
+			}
+			return getIndicatorKey() + ".tooltip";
+		}
+
+		public String getIndicatorKey() {
+			if (indicatorID != null) {
+				return indicatorID;
+			}
+			switch (statusID) {
+				case STATUS_ID_OK:
+					return "vpnhelper.indicator.ok";
+				case STATUS_ID_WARN:
+					return "vpnhelper.indicator.warn";
+				case STATUS_ID_BAD:
+					return "vpnhelper.indicator.bad";
+			}
+			return null;
+		}
 	}
 
 	private class BindableInterface

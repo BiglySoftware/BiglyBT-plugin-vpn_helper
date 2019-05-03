@@ -125,19 +125,24 @@ public class UI
 							: PluginVPNHelper.instance.checker.getCurrentStatus();
 
 					LocaleUtilities texts = UI.this.pi.getUtilities().getLocaleUtilities();
+					String indicatorKey = status.getIndicatorKey();
+					if (indicatorKey != null) {
+						return texts.getLocalisedMessageText(indicatorKey);
+					}
+					return null;
+				}
+				if (propertyID == ViewTitleInfo.TITLE_INDICATOR_TEXT_TOOLTIP) {
+					Status status = PluginVPNHelper.instance.checker == null
+							? new Status(CheckerCommon.STATUS_ID_WARN)
+							: PluginVPNHelper.instance.checker.getCurrentStatus();
 
-					if (status.indicatorID != null) {
-						return texts.getLocalisedMessageText("vpnhelper.indicator." + status.indicatorID);
-					}
+					LocaleUtilities texts = UI.this.pi.getUtilities().getLocaleUtilities();
 
-					if (status.statusID == CheckerCommon.STATUS_ID_OK) {
-						return texts.getLocalisedMessageText("vpnhelper.indicator.ok");
-					}
-					if (status.statusID == CheckerCommon.STATUS_ID_BAD) {
-						return texts.getLocalisedMessageText("vpnhelper.indicator.bad");
-					}
-					if (status.statusID == CheckerCommon.STATUS_ID_WARN) {
-						return texts.getLocalisedMessageText("vpnhelper.indicator.warn");
+					String indicatorTooltipKey = status.getIndicatorTooltipKey();
+					if (indicatorTooltipKey != null
+							&& (texts.hasLocalisedMessageText(indicatorTooltipKey)
+									|| indicatorTooltipKey.startsWith("!"))) {
+						return texts.getLocalisedMessageText(indicatorTooltipKey);
 					}
 					return null;
 				}
@@ -152,24 +157,24 @@ public class UI
 							: PluginVPNHelper.instance.checker.getCurrentStatus().statusID;
 
 					if (statusID == CheckerCommon.STATUS_ID_OK) {
-						return new int[]{
-								0,
-								80,
-								0
+						return new int[] {
+							0,
+							80,
+							0
 						};
 					}
 					if (statusID == CheckerCommon.STATUS_ID_BAD) {
-						return new int[]{
-								128,
-								30,
-								30
+						return new int[] {
+							128,
+							30,
+							30
 						};
 					}
 					if (statusID == CheckerCommon.STATUS_ID_WARN) {
-						return new int[]{
-								255,
-								140,
-								0
+						return new int[] {
+							255,
+							140,
+							0
 						};
 					}
 					return null;

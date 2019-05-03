@@ -22,6 +22,7 @@ import java.io.*;
 import java.net.*;
 import java.util.*;
 
+import com.biglybt.pif.utils.LocaleUtilities;
 import org.apache.http.NameValuePair;
 import org.apache.http.client.config.RequestConfig;
 import org.apache.http.client.entity.UrlEncodedFormEntity;
@@ -107,11 +108,16 @@ public class Checker_PIA
 
 		List<Parameter> params = new ArrayList<>(1);
 		File path = getPIAManagerPath(pi.getUtilities());
-		paramManagerDir = configModel.addDirectoryParameter2(
-				CONFIG_PIA_MANAGER_DIR, CONFIG_PIA_MANAGER_DIR,
-				path == null ? "" : path.toString());
+		paramManagerDir = configModel.addDirectoryParameter2(CONFIG_PIA_MANAGER_DIR,
+				CONFIG_PIA_MANAGER_DIR, path == null ? "" : path.toString());
 		paramManagerDir.setVisible(pi.getUtilities().isWindows());
 		params.add(paramManagerDir);
+		if (paramManagerDir.hasBeenSet()) {
+			String value = paramManagerDir.getValue();
+			if (value == null || !new File(value).isDirectory()) {
+				paramManagerDir.resetToDefault();
+			}
+		}
 
 		String[] creds = getDefaultCreds(pi);
 
@@ -219,6 +225,84 @@ public class Checker_PIA
 				? transform(encoded.substring(4)) : encoded;
 	}
 
+	private static File getPIAManagerLogFile(Utilities utils) {
+		File fileManagerLog = null;
+		if (utils.isOSX()) {
+			fileManagerLog = new File(
+					"/Library/Application Support/com.privateinternetaccess.vpn/daemon.log");
+			if (fileManagerLog.isFile()) {
+				return fileManagerLog;
+			}
+		}
+
+		File piaManagerDataPath = getPIAManagerDataPath();
+		if (piaManagerDataPath != null) {
+			fileManagerLog = new File(piaManagerDataPath, "daemon.log");
+			if (fileManagerLog.isFile()) {
+				return fileManagerLog;
+			}
+		}
+
+		String pathPIAManager = paramManagerDir.getValue();
+		File oldLogFile = new File(new File(pathPIAManager, "log"), "pia_nw.log");
+		if (oldLogFile.isFile()) {
+			return oldLogFile;
+		}
+		return fileManagerLog;
+	}
+
+	private static File getPIAManagerPath(Utilities utils) {
+		File pathPIAManager = null;
+		if (utils.isWindows()) {
+			String pathProgFiles = System.getenv("ProgramFiles");
+			if (pathProgFiles != null) {
+				pathPIAManager = new File(pathProgFiles, "Private Internet Access");
+				if (!pathPIAManager.exists()) {
+					File oldPath = new File(pathProgFiles, "pia_manager");
+					if (oldPath.exists()) {
+						pathPIAManager = oldPath;
+					}
+				}
+			}
+			if (pathPIAManager == null || !pathPIAManager.exists()) {
+				String pathProgFiles86 = System.getenv("ProgramFiles(x86)");
+				if (pathProgFiles86 == null && pathProgFiles != null) {
+					pathProgFiles86 = pathProgFiles + " (x86)";
+				}
+				if (pathProgFiles86 != null) {
+					pathPIAManager = new File(pathProgFiles86, "Private Internet Access");
+					if (!pathPIAManager.exists()) {
+						File oldPath = new File(pathProgFiles86, "pia_manager");
+						if (oldPath.exists()) {
+							pathPIAManager = oldPath;
+						}
+					}
+				}
+			}
+			if (pathPIAManager == null || !pathPIAManager.exists()) {
+				pathPIAManager = new File("C:\\Program Files\\Private Internet Access");
+				if (!pathPIAManager.exists()) {
+					File oldPath = new File("C:\\Program Files\\pia_manager");
+					if (oldPath.exists()) {
+						pathPIAManager = oldPath;
+					}
+				}
+			}
+		} else if (utils.isOSX()) {
+			pathPIAManager = new File(
+					"/Library/Preferences/com.privateinternetaccess.vpn");
+			if (pathPIAManager.exists()) {
+				return pathPIAManager;
+			}
+			File oldPath = new File(System.getProperty("user.home"), ".pia_manager");
+			if (oldPath.exists()) {
+				return oldPath;
+			}
+		}
+
+		return pathPIAManager;
+	}
+
 	private Status checkStatusFileForPort(StringBuilder sReply) {
 		// Read the status_file for forwarding port
 
@@ -307,7 +391,7 @@ public class Checker_PIA
 			e.printStackTrace();
 		}
 
-		return new Status(gotValidPort? STATUS_ID_OK : STATUS_ID_WARN);
+		return new Status(gotValidPort ? STATUS_ID_OK : STATUS_ID_WARN);
 	}
 
 	private boolean searchLogForPort(StringBuilder sReply) {
@@ -326,8 +410,7 @@ public class Checker_PIA
 		if (fileManagerLog == null || !fileManagerLog.isFile()
 				|| !fileManagerLog.canRead()
 				|| fileManagerLog.lastModified() <= SystemTime.getOffsetTime(
-				-1000L * 60 * 60 * 24)) {
-
+						-1000L * 60 * 60 * 24)) {
 
 			File fileDataPath = getPIAManagerDataPath();
 			if (fileDataPath != null) {
@@ -342,7 +425,10 @@ public class Checker_PIA
 		FileInputStream fis = null;
 		try {
 			fis = new FileInputStream(fileManagerLog);
-			fis.skip(fileManagerLog.length() - 32767);
+			long skip = fileManagerLog.length() - (1024 * 128);
+			if (skip > 0) {
+				fis.skip(skip);
+			}
 			String tail = FileUtil.readInputStreamAsString(fis, -1, "utf8");
 			String FIND_STRING = "|status| Received status {";
 			int i = tail.lastIndexOf(FIND_STRING);
@@ -384,8 +470,7 @@ public class Checker_PIA
 							String regionCode = MapUtils.getMapString(mapRegion,
 									"region_code", null);
 							if (ourRegion.equals(regionCode)) {
-								Object forwarding = mapRegion.get(
-										"supports_port_forwarding");
+								Object forwarding = mapRegion.get("supports_port_forwarding");
 								regionName = (String) mapRegion.get("region_name");
 								if (forwarding instanceof Boolean) {
 									supportsForwarding = (Boolean) forwarding;
@@ -407,26 +492,31 @@ public class Checker_PIA
 				FIND_STRING = "Forwarded port updated to ";
 				i = tail.lastIndexOf(FIND_STRING);
 				if (i >= 0) {
-					int start = i + FIND_STRING.length() - 1;
+					int start = i + FIND_STRING.length();
 					int end = tail.indexOf("\r", start);
 					if (end < 0) {
 						end = tail.indexOf('\n', start);
 					}
 					if (end >= 1) {
 						String portString = tail.substring(start, end);
-						int port = Integer.parseInt(portString);
+						try {
+							int port = Integer.parseInt(portString);
+							if (port > 0) {
+								addReply(sReply, CHAR_GOOD, "pia.port.in.log",
+										Integer.toString(port));
 
-						if (port > 0) {
-							addReply(sReply, CHAR_GOOD, "pia.port.in.log",
-									Integer.toString(port));
+								changePort(port, sReply);
 
-							changePort(port, sReply);
-
-							return true;
-						} else if (port == -3) {
-							// Assume -3 means server doesn't support open port
-							addReply(sReply, CHAR_WARN, "pia.no.forwarding.port.region",
-									"current");
+								return true;
+							} else if (port == -3) {
+								// Assume -3 means server doesn't support open port
+								addReply(sReply, CHAR_WARN, "pia.no.forwarding.port.region",
+										"current");
+							} else {
+								addReply(sReply, CHAR_WARN, "pia.port.in.log", portString);
+							}
+						} catch (NumberFormatException num) {
+							addReply(sReply, CHAR_WARN, "pia.port.in.log", portString);
 						}
 					}
 				}
@@ -447,31 +537,10 @@ public class Checker_PIA
 		return false;
 	}
 
-	private static File getPIAManagerLogFile(Utilities utils) {
-		String pathPIAManager = paramManagerDir.getValue();
-
-		File fileManagerLog;
-		if (utils.isOSX()) {
-			fileManagerLog = new File(
-					"/Libaray/Application Support/com.privateinternetaccess.vpn/daemon.log");
-			if (fileManagerLog.isFile()) {
-				return fileManagerLog;
-			}
-		}
-		fileManagerLog = new File(new File(pathPIAManager, "log"), "pia_nw.log");
-		if (!fileManagerLog.isFile()) {
-			File piaManagerDataPath = getPIAManagerDataPath();
-			if (piaManagerDataPath != null) {
-				fileManagerLog = new File(piaManagerDataPath, "daemon.log");
-			}
-		}
-		return fileManagerLog;
-	}
-
 	/**
 	 * Calls PIA RPC to get port
 	 */
-	private boolean getPort(InetAddress bindIP, StringBuilder sReply) {
+	private Status getPort(InetAddress bindIP, StringBuilder sReply) {
 		InetAddress[] resolve = null;
 		try {
 			String clientID = null;
@@ -509,7 +578,7 @@ public class Checker_PIA
 
 			if (user == null || user.length() == 0 || pass == null
 					|| pass.length() == 0) {
-				return false;
+				return new Status(STATUS_ID_WARN);
 			}
 
 			List<NameValuePair> urlParameters = new ArrayList<>();
@@ -572,15 +641,22 @@ public class Checker_PIA
 			if (!gotPort) {
 				addReply(sReply, CHAR_WARN, "vpnhelper.rpc.bad", result.toString());
 
-				// mapResult.containsKey("error")
-				return false;
+				String error = MapUtils.getMapString(mapResult, "error", null);
+				if (error != null) {
+					LocaleUtilities l10n = pi.getUtilities().getLocaleUtilities();
+					error = "!" + error + "\n" + l10n.getLocalisedMessageText(
+							"vpnhelper.indicator.noport.tooltip") + "!";
+				}
+				Status status = new Status(STATUS_ID_WARN);
+				status.indicatorTooltipID = error;
+				return status;
 			}
 		} catch (Exception e) {
 			e.printStackTrace();
 			addReply(sReply, CHAR_BAD, "vpnhelper.rpc.no.connect",
 					bindIP + ": " + e.getMessage());
 
-			return false;
+			return new Status(STATUS_ID_WARN);
 		} finally {
 			AEProxySelector selector = AEProxySelectorFactory.getSelector();
 			if (selector != null && resolve != null) {
@@ -590,74 +666,31 @@ public class Checker_PIA
 				}
 			}
 		}
-		return true;
-	}
-
-	private static File getPIAManagerPath(Utilities utils) {
-		File pathPIAManager = null;
-		if (utils.isWindows()) {
-			String pathProgFiles = System.getenv("ProgramFiles");
-			if (pathProgFiles != null) {
-				pathPIAManager = new File(pathProgFiles, "Private Internet Access");
-				if (!pathPIAManager.exists()) {
-					File oldPath = new File(pathProgFiles, "pia_manager");
-					if (oldPath.exists()) {
-						pathPIAManager = oldPath;
-					}
-				}
-			}
-			if (pathPIAManager == null || !pathPIAManager.exists()) {
-				String pathProgFiles86 = System.getenv("ProgramFiles(x86)");
-				if (pathProgFiles86 == null && pathProgFiles != null) {
-					pathProgFiles86 = pathProgFiles + " (x86)";
-				}
-				if (pathProgFiles86 != null) {
-					pathPIAManager = new File(pathProgFiles86, "Private Internet Access");
-					if (!pathPIAManager.exists()) {
-						File oldPath = new File(pathProgFiles86, "pia_manager");
-						if (oldPath.exists()) {
-							pathPIAManager = oldPath;
-						}
-					}
-				}
-			}
-			if (pathPIAManager == null || !pathPIAManager.exists()) {
-				pathPIAManager = new File("C:\\Program Files\\Private Internet Access");
-				if (!pathPIAManager.exists()) {
-					File oldPath = new File("C:\\Program Files\\pia_manager");
-					if (oldPath.exists()) {
-						pathPIAManager = oldPath;
-					}
-				}
-			}
-		} else if (utils.isOSX()) {
-			pathPIAManager = new File(
-					"/Libary/Preferences/com.privateinternataccess.vpn");
-			if (!pathPIAManager.exists()) {
-				File oldPath = new File(System.getProperty("user.home"),
-						".pia_manager");
-				if (oldPath.exists()) {
-					pathPIAManager = oldPath;
-				}
-			}
-			pathPIAManager = new File(System.getProperty("user.home"),
-					".pia_manager");
-		}
-
-		return pathPIAManager;
+		return new Status(STATUS_ID_OK);
 	}
 
 	@Override
 	protected Status callRPCforPort(InetAddress vpnIP, StringBuilder sReply) {
 
-		boolean ok = paramTryPortRPC.getValue() && getPort(vpnIP, sReply);
-		if (ok) {
-			return new Status(STATUS_ID_OK);
+		Status rpcStatus = null;
+		if (paramTryPortRPC.getValue()) {
+			rpcStatus = getPort(vpnIP, sReply);
+			if (rpcStatus.statusID == STATUS_ID_OK) {
+				return rpcStatus;
+			}
 		}
 
 		Status status = checkStatusFileForPort(sReply);
-		if (status.statusID == STATUS_ID_WARN && status.indicatorID == null) {
-			status.indicatorID = "noport";
+		if (status.statusID == STATUS_ID_WARN) {
+			// RPC Status indicator overrides file check status indicator
+			if (rpcStatus != null && rpcStatus.indicatorID != null) {
+				status.indicatorID = rpcStatus.indicatorID;
+			} else if (status.indicatorID == null) {
+				status.indicatorID = "vpnhelper.indicator.noport";
+			}
+			if (status.indicatorTooltipID == null && rpcStatus != null) {
+				status.indicatorTooltipID = rpcStatus.indicatorTooltipID;
+			}
 		}
 		return status;
 	}
