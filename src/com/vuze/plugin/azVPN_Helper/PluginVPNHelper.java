@@ -80,9 +80,7 @@ public class PluginVPNHelper
 
 	protected List<CheckerListener> listeners = new ArrayList<CheckerListener>(1);
 
-	private HashMap<String, List<Parameter>> mapVPNConfigParams;
-
-	private ParameterTabFolder tabFolder;
+	private HashMap<String, ParameterGroup> mapVPNConfigParamGroup;
 
 	/* (non-Javadoc)
 	 * @see com.biglybt.pif.Plugin#initialize(com.biglybt.pif.PluginInterface)
@@ -176,16 +174,11 @@ public class PluginVPNHelper
 
 					ParameterGroup group = configModel.createGroup(groupName,
 							listParams.toArray(new Parameter[0]));
-					tabFolder.addTab(group);
+					mapVPNConfigParamGroup.put(vpnID, group);
 
-					for (Parameter configParameter : listParams) {
-						//configParameter.setVisible(visible);
-						configParameter.setEnabled(visible);
-					}
-
+					group.setVisible(visible);
+					group.setEnabled(visible);
 				}
-
-				mapVPNConfigParams.put(vpnID, listParams);
 
 			} catch (Throwable e) {
 				e.printStackTrace();
@@ -222,12 +215,10 @@ public class PluginVPNHelper
 				e.printStackTrace();
 			}
 
-			List<Parameter> list = mapVPNConfigParams.get(vpnID);
-			if (list != null && list.size() > 0) {
-				for (Parameter configParameter : list) {
-					//configParameter.setVisible(true);
-					configParameter.setEnabled(true);
-				}
+			ParameterGroup pg = mapVPNConfigParamGroup.get(vpnID);
+			if (pg != null) {
+				pg.setEnabled(true);
+				pg.setVisible(true);
 			}
 		}
 
@@ -254,12 +245,10 @@ public class PluginVPNHelper
 					checker.destroy();
 					checker = null;
 
-					List<Parameter> list = mapVPNConfigParams.get(checkerID);
-					if (list != null && list.size() > 0) {
-						for (Parameter configParameter : list) {
-							//configParameter.setVisible(false);
-							configParameter.setEnabled(false);
-						}
+					ParameterGroup pg = mapVPNConfigParamGroup.get(checkerID);
+					if (pg != null) {
+						pg.setEnabled(false);
+						pg.setVisible(false);
 					}
 
 					checkerID = null;
@@ -278,14 +267,11 @@ public class PluginVPNHelper
 								PluginInterface.class).newInstance(pi);
 						checkerID = vpnID;
 
-						List<Parameter> list = mapVPNConfigParams.get(vpnID);
-						if (list != null && list.size() > 0) {
-							for (Parameter configParameter : list) {
-								//configParameter.setVisible(true);
-								configParameter.setEnabled(true);
-							}
+						ParameterGroup pg = mapVPNConfigParamGroup.get(checkerID);
+						if (pg != null) {
+							pg.setEnabled(true);
+							pg.setVisible(true);
 						}
-
 					} catch (Throwable e) {
 						e.printStackTrace();
 					}
@@ -340,7 +326,7 @@ public class PluginVPNHelper
 		paramIgnoreAddress.setMinimumRequiredUserMode(
 				StringParameter.MODE_ADVANCED);
 
-		mapVPNConfigParams = new HashMap<String, List<Parameter>>(1);
+		mapVPNConfigParamGroup = new HashMap<>();
 
 		DirectoryParameter paramPortReadLocation = configModel.addDirectoryParameter2(
 				PluginConstants.CONFIG_PORT_READ_LOCATION,
@@ -362,8 +348,6 @@ public class PluginVPNHelper
 		});
 		paramPortReadLocationRegEx.setEnabled(
 				!paramPortReadLocation.getValue().isEmpty());
-
-		tabFolder = configModel.createTabFolder();
 	}
 
 	/* (non-Javadoc)
