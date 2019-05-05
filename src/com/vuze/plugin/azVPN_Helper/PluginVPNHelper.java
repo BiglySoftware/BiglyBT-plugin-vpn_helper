@@ -353,7 +353,7 @@ public class PluginVPNHelper
 				PluginConstants.CONFIG_PORT_READ_LOCATION_REGEX,
 				PluginConstants.CONFIG_PORT_READ_LOCATION_REGEX,
 				"[^0-9]*([0-9]{3,5})[^0-9]?");
-		paramPortReadLocation.setMinimumRequiredUserMode(
+		paramPortReadLocationRegEx.setMinimumRequiredUserMode(
 				StringParameter.MODE_INTERMEDIATE);
 
 		paramPortReadLocation.addListener(param -> {
