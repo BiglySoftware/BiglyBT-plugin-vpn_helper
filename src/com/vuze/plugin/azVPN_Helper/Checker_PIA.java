@@ -20,9 +20,11 @@ package com.vuze.plugin.azVPN_Helper;
 
 import java.io.*;
 import java.net.*;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
 
-import com.biglybt.pif.utils.LocaleUtilities;
 import org.apache.http.NameValuePair;
 import org.apache.http.client.config.RequestConfig;
 import org.apache.http.client.entity.UrlEncodedFormEntity;
@@ -35,7 +37,6 @@ import org.apache.http.message.BasicNameValuePair;
 
 import com.biglybt.core.proxy.AEProxySelector;
 import com.biglybt.core.proxy.AEProxySelectorFactory;
-import com.biglybt.core.util.Constants;
 import com.biglybt.core.util.FileUtil;
 import com.biglybt.core.util.RandomUtils;
 import com.biglybt.core.util.SystemTime;
@@ -46,6 +47,7 @@ import com.biglybt.pif.PluginConfig;
 import com.biglybt.pif.PluginInterface;
 import com.biglybt.pif.ui.config.*;
 import com.biglybt.pif.ui.model.BasicPluginConfigModel;
+import com.biglybt.pif.utils.LocaleUtilities;
 import com.biglybt.pif.utils.Utilities;
 
 /**
@@ -140,7 +142,7 @@ public class Checker_PIA
 		return params;
 	}
 
-	private static File getPIAManagerDataPath() {
+	private static File getPIAManagerDataPath(Utilities utils) {
 		if (paramManagerDir == null) {
 			return null;
 		}
@@ -148,6 +150,10 @@ public class Checker_PIA
 		String pathPIAManager = paramManagerDir.getValue();
 		if (pathPIAManager == null) {
 			return null;
+		}
+
+		if (utils.isUnix()) {
+			return new File(pathPIAManager, "etc");
 		}
 
 		// Windows has it in "data", OSX in root.  Check both
@@ -167,7 +173,7 @@ public class Checker_PIA
 			"",
 			""
 		};
-		File pathPIAManagerData = getPIAManagerDataPath();
+		File pathPIAManagerData = getPIAManagerDataPath(pi.getUtilities());
 		if (pathPIAManagerData == null) {
 			return ret;
 		}
@@ -233,9 +239,14 @@ public class Checker_PIA
 			if (fileManagerLog.isFile()) {
 				return fileManagerLog;
 			}
+		} else if (utils.isUnix()) {
+			fileManagerLog = new File("/opt/piavpn/var/daemon.log");
+			if (fileManagerLog.isFile()) {
+				return fileManagerLog;
+			}
 		}
 
-		File piaManagerDataPath = getPIAManagerDataPath();
+		File piaManagerDataPath = getPIAManagerDataPath(utils);
 		if (piaManagerDataPath != null) {
 			fileManagerLog = new File(piaManagerDataPath, "daemon.log");
 			if (fileManagerLog.isFile()) {
@@ -298,6 +309,15 @@ public class Checker_PIA
 			if (oldPath.exists()) {
 				return oldPath;
 			}
+		} else {
+			pathPIAManager = new File("/opt/piavpn");
+			if (pathPIAManager.exists()) {
+				return pathPIAManager;
+			}
+			File oldPath = new File(System.getProperty("user.home"), ".pia_manager");
+			if (oldPath.exists()) {
+				return oldPath;
+			}
 		}
 
 		return pathPIAManager;
@@ -306,20 +326,22 @@ public class Checker_PIA
 	private Status checkStatusFileForPort(StringBuilder sReply) {
 		// Read the status_file for forwarding port
 
-		File pathPIAManagerData = getPIAManagerDataPath();
+		File pathPIAManagerData = getPIAManagerDataPath(pi.getUtilities());
 		if (pathPIAManagerData == null) {
 			return new Status(STATUS_ID_WARN);
 		}
 		File pathPIAManager = new File(paramManagerDir.getValue());
 
-		// Old PIA Manager had port stored in settings.json.  New doesn't
 		try {
 			File fileSettings = new File(pathPIAManagerData, "settings.json");
 			String settingsString = FileUtil.readFileAsString(fileSettings, -1);
 			Map<?, ?> mapSettings = JSONUtils.decodeJSON(settingsString);
-			if (mapSettings != null && mapSettings.containsKey("portforward")) {
-				boolean portForwardEnabled = (Boolean) mapSettings.get("portforward");
-				if (!portForwardEnabled) {
+			if (mapSettings != null) {
+				// old key was "portforward", new key is "portForward"
+				Boolean portForwardEnabled = mapSettings.containsKey("portforward")
+						? (Boolean) mapSettings.get("portforward")
+						: (Boolean) mapSettings.get("portForward");
+				if (portForwardEnabled != null && !portForwardEnabled) {
 					addReply(sReply, CHAR_WARN, "pia.no.port.config");
 					return new Status(STATUS_ID_WARN);
 				}
@@ -412,10 +434,16 @@ public class Checker_PIA
 				|| fileManagerLog.lastModified() <= SystemTime.getOffsetTime(
 						-1000L * 60 * 60 * 24)) {
 
-			File fileDataPath = getPIAManagerDataPath();
-			if (fileDataPath != null) {
-				if (!new File(fileDataPath, "debug.txt").isFile()) {
+			if (pi.getUtilities().isUnix()) {
+				if (!new File(fileManagerLog.getParentFile(), "debug.txt").isFile()) {
 					addReply(sReply, CHAR_WARN, "pia.no.logging");
+				}
+			} else {
+				File fileDataPath = getPIAManagerDataPath(pi.getUtilities());
+				if (fileDataPath != null) {
+					if (!new File(fileDataPath, "debug.txt").isFile()) {
+						addReply(sReply, CHAR_WARN, "pia.no.logging");
+					}
 				}
 			}
 
@@ -544,7 +572,7 @@ public class Checker_PIA
 		InetAddress[] resolve = null;
 		try {
 			String clientID = null;
-			File pathPIAManagerData = getPIAManagerDataPath();
+			File pathPIAManagerData = getPIAManagerDataPath(pi.getUtilities());
 			if (pathPIAManagerData != null) {
 				// client_id.txt is no longer used.  Check anyway for legacy users
 				File fileClientID = new File(pathPIAManagerData, "client_id.txt");
