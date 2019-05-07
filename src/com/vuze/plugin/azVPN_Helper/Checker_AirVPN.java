@@ -39,24 +39,27 @@ import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.impl.client.HttpClients;
 import org.apache.http.impl.conn.SystemDefaultDnsResolver;
 import org.apache.http.message.BasicNameValuePair;
+
+import com.biglybt.core.proxy.AEProxySelector;
+import com.biglybt.core.proxy.AEProxySelectorFactory;
 import com.biglybt.core.util.Constants;
 import com.biglybt.core.util.SystemProperties;
 import com.biglybt.core.util.UrlUtils;
 import com.biglybt.core.xml.simpleparser.SimpleXMLParserDocumentFactory;
 import com.biglybt.platform.PlatformManager;
 import com.biglybt.platform.PlatformManagerFactory;
+import com.biglybt.util.MapUtils;
+
 import com.biglybt.pif.PluginConfig;
 import com.biglybt.pif.PluginInterface;
 import com.biglybt.pif.platform.PlatformManagerException;
-import com.biglybt.pif.ui.config.*;
+import com.biglybt.pif.ui.config.Parameter;
+import com.biglybt.pif.ui.config.PasswordParameter;
+import com.biglybt.pif.ui.config.StringParameter;
 import com.biglybt.pif.ui.model.BasicPluginConfigModel;
 import com.biglybt.pif.utils.xml.simpleparser.SimpleXMLParserDocument;
 import com.biglybt.pif.utils.xml.simpleparser.SimpleXMLParserDocumentAttribute;
 import com.biglybt.pif.utils.xml.simpleparser.SimpleXMLParserDocumentNode;
-
-import com.biglybt.core.proxy.AEProxySelector;
-import com.biglybt.core.proxy.AEProxySelectorFactory;
-import com.biglybt.util.MapUtils;
 
 /**
  * AirVPN
@@ -79,17 +82,17 @@ public class Checker_AirVPN
 	private static final String VPN_PORTS_URL = "https://" + VPN_DOMAIN
 			+ "/ports/";
 
-	private static final String REGEX_ActionURL = "action=\"([^\"]+)\"";
+	private static final String REGEX_ActionURL = "action=['\"]([^'\"]+)['\"]";
 
-	private static final String REGEX_AuthKey = "name=['\"]auth_key['\"]\\s*value=['\"]([^\"']+)['\"]";
+	private static final String REGEX_AuthKey = "name=['\"]csrfKey['\"]\\s*value=['\"]([^\"']+)['\"]";
 
-	private static final String REGEX_Port = "class=\"ports_port\">([0-9]+)<";
+	private static final String REGEX_Port = "class=\"ports_port\"[^>]*>([0-9]+)<";
 
 	private static final String REGEX_Token = "name=['\"]csrf_token['\"]\\s*value=['\"]([^\"']+)['\"]";
 
 	private static final String REGEX_PortForwardedTo = "<td>Forwarded to:</td><td>([0-9]+\\.[0-9]+\\.[0-9]+\\.[0-9]+)</td>";
 
-	private static final String REGEX_NotConnected = "\"Not connected\"";
+	private static final String REGEX_NotConnected = "['\"]Not connected['\"]";
 
 	private static final String USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/56.0.2924.87 Safari/537.36";
 
@@ -113,8 +116,8 @@ public class Checker_AirVPN
 				PluginConstants.CONFIG_USER, "vpnhelper.config.user", "");
 		params.add(paramUser);
 		PasswordParameter paramPass = configModel.addPasswordParameter2(
-				PluginConstants.CONFIG_P, "vpnhelper.config.pass", PasswordParameter.ET_PLAIN,
-				new byte[] {});
+				PluginConstants.CONFIG_P, "vpnhelper.config.pass",
+				PasswordParameter.ET_PLAIN, new byte[] {});
 		params.add(paramPass);
 
 		return params;
@@ -247,15 +250,14 @@ public class Checker_AirVPN
 			} else {
 				PluginVPNHelper.log(
 						"Have existing context.  Trying to grab port list without logging in.");
-				ports = scrapePorts(bindIP, token);
+				ports = scrapePorts(bindIP, token, sReply);
 				// assume no token means we aren't logged in
 				if (token.length() > 0) {
 					PluginVPNHelper.log("Valid ports page. Skipping Login");
 					skipLoginPage = true;
 					alreadyLoggedIn = true;
-					
+
 					if (ports == null) {
-						addReply(sReply, CHAR_WARN, "airvpn.vpnhelper.rpc.notconnected");
 						return new Status(STATUS_ID_WARN);
 					}
 				} else {
@@ -287,7 +289,7 @@ public class Checker_AirVPN
 				String line = "";
 				while ((line = rd.readLine()) != null) {
 					if (line.contains("<form")
-							&& line.matches(".*id=['\"]login['\"].*")) {
+							&& line.contains("core.global.core.login")) {
 						Matcher matcher = Pattern.compile(REGEX_ActionURL).matcher(line);
 						if (matcher.find()) {
 							loginURL = matcher.group(1);
@@ -313,7 +315,7 @@ public class Checker_AirVPN
 
 				if (loginURL == null) {
 					PluginVPNHelper.log("Could not scrape Login URL.  Using default");
-					loginURL = "https://airvpn.org/index.php?app=core&module=global&section=login&do=process";
+					loginURL = "https://airvpn.org/login/";
 				}
 				if (authKey == null) {
 					addReply(sReply, CHAR_WARN, "vpnhelper.rpc.noauthkey");
@@ -328,8 +330,6 @@ public class Checker_AirVPN
 					PluginVPNHelper.log("Already Logged In");
 				} else {
 					PluginVPNHelper.log("Login URL:" + loginURL);
-					//https://airvpn.org/index.php?app=core&module=global&section=login&do=process
-					//https://airvpn.org/index.php?app=core&module=global&section=login&do=process
 
 					HttpPost httpPostLogin = new HttpPost(loginURL);
 
@@ -342,12 +342,13 @@ public class Checker_AirVPN
 					CloseableHttpClient httpClient = HttpClients.createDefault();
 
 					List<NameValuePair> urlParameters = new ArrayList<NameValuePair>();
-					urlParameters.add(new BasicNameValuePair("ips_username", user));
-					urlParameters.add(new BasicNameValuePair("ips_password", pass));
-					urlParameters.add(new BasicNameValuePair("auth_key", authKey));
-					urlParameters.add(new BasicNameValuePair("referer", "http://airvpn.org/"));
+					urlParameters.add(new BasicNameValuePair("auth", user));
+					urlParameters.add(new BasicNameValuePair("password", pass));
+					urlParameters.add(new BasicNameValuePair("csrfKey", authKey));
+					urlParameters.add(
+							new BasicNameValuePair("_processLogin", "usernamepassword"));
 					urlParameters.add(new BasicNameValuePair("anonymous", "1"));
-					urlParameters.add(new BasicNameValuePair("rememberMe", "1"));
+					urlParameters.add(new BasicNameValuePair("remember_me", "1"));
 
 					httpPostLogin.setEntity(new UrlEncodedFormEntity(urlParameters));
 
@@ -369,7 +370,7 @@ public class Checker_AirVPN
 			////////////////////////////
 
 			if (ports == null) {
-				ports = scrapePorts(bindIP, token);
+				ports = scrapePorts(bindIP, token, sReply);
 				if (ports == null && token.length() > 0) {
 					addReply(sReply, CHAR_WARN, "airvpn.vpnhelper.rpc.notconnected");
 					return new Status(STATUS_ID_WARN);
@@ -383,7 +384,7 @@ public class Checker_AirVPN
 				addReply(sReply, CHAR_GOOD, "vpnhelper.port.from.rpc.match",
 						new String[] {
 							ports[existingIndex].port
-				});
+						});
 				return new Status(STATUS_ID_OK);
 			}
 
@@ -404,12 +405,12 @@ public class Checker_AirVPN
 				changePort(port, sReply);
 			} else if (ports != null) {
 				// create port
-				ports = createPort(bindIP, token);
+				ports = createPort(bindIP, token, sReply);
 				if (ports.length == 0) {
 					// form post should have got the new port, but if it didn't, try
 					// reloading the ports page again.
 					token.setLength(0);
-					ports = scrapePorts(bindIP, token);
+					ports = scrapePorts(bindIP, token, sReply);
 				}
 
 				PluginVPNHelper.log("Added a port. Ports: " + Arrays.toString(ports));
@@ -419,7 +420,7 @@ public class Checker_AirVPN
 					addReply(sReply, CHAR_GOOD, "vpnhelper.port.from.rpc.match",
 							new String[] {
 								ports[existingIndex].port
-					});
+							});
 					return new Status(STATUS_ID_OK);
 				}
 
@@ -462,7 +463,8 @@ public class Checker_AirVPN
 		return new Status(STATUS_ID_OK);
 	}
 
-	private PortInfo[] createPort(InetAddress bindIP, StringBuffer token)
+	private PortInfo[] createPort(InetAddress bindIP, StringBuffer token,
+			StringBuilder sReply)
 			throws ClientProtocolException, IOException {
 		HttpPost httpPostCreatePort = new HttpPost(VPN_PORTS_URL);
 
@@ -494,13 +496,14 @@ public class Checker_AirVPN
 
 		String bindIPString = bindIP == null ? null : bindIP.getHostAddress();
 
-		PortInfo[] ports = parsePorts(rd, bindIPString, token);
+		PortInfo[] ports = parsePorts(rd, bindIPString, token, sReply);
 		rd.close();
 
 		return ports;
 	}
 
-	private PortInfo[] scrapePorts(InetAddress bindIP, StringBuffer token)
+	private PortInfo[] scrapePorts(InetAddress bindIP, StringBuffer token,
+			StringBuilder sReply)
 			throws ClientProtocolException, IOException {
 		String bindIPString = bindIP == null ? null : bindIP.getHostAddress();
 		HttpGet getPortsPage = new HttpGet(VPN_PORTS_URL);
@@ -516,7 +519,7 @@ public class Checker_AirVPN
 		BufferedReader rd = new BufferedReader(
 				new InputStreamReader(portsPageResponse.getEntity().getContent()));
 
-		PortInfo[] ports = parsePorts(rd, bindIPString, token);
+		PortInfo[] ports = parsePorts(rd, bindIPString, token, sReply);
 
 		rd.close();
 
@@ -524,8 +527,8 @@ public class Checker_AirVPN
 	}
 
 	private PortInfo[] parsePorts(BufferedReader rd, String bindIPString,
-			StringBuffer token)
-					throws IOException {
+			StringBuffer token, StringBuilder sReply)
+			throws IOException {
 		Pattern patPort = Pattern.compile(REGEX_Port);
 		Pattern patToken = Pattern.compile(REGEX_Token);
 		Pattern patFwdToIP = Pattern.compile(REGEX_PortForwardedTo);
@@ -574,7 +577,7 @@ public class Checker_AirVPN
 
 			Matcher matcherNC = patNotConnected.matcher(line);
 			if (matcherNC.find()) {
-				PluginVPNHelper.log("AirVPN's ports page indicates you are not connected to VPN");
+				addReply(sReply, CHAR_WARN, "airvpn.vpnhelper.rpc.notconnected");
 				return null;
 			}
 		}
@@ -583,7 +586,8 @@ public class Checker_AirVPN
 		Arrays.sort(array, new Comparator<PortInfo>() {
 			@Override
 			public int compare(PortInfo x, PortInfo y) {
-				return Boolean.valueOf(x.ourBinding).compareTo(Boolean.valueOf(y.ourBinding));
+				return Boolean.valueOf(x.ourBinding).compareTo(
+						Boolean.valueOf(y.ourBinding));
 			}
 		});
 		return array;
