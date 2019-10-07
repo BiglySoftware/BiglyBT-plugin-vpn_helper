@@ -20,10 +20,7 @@ package com.vuze.plugin.azVPN_Helper;
 
 import java.io.*;
 import java.net.*;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 import org.apache.http.NameValuePair;
 import org.apache.http.client.config.RequestConfig;
@@ -89,25 +86,6 @@ public class Checker_PIA
 
 	public static List<Parameter> setupConfigModel(PluginInterface pi,
 			BasicPluginConfigModel configModel) {
-
-		// AirVPN and PIA used to share CONFIG_PIA_USER and CONFIG_PIA_P
-		// Check if old keys are used, and migrate to separate keys
-		PluginConfig pc = pi.getPluginconfig();
-		if (!pc.hasPluginParameter(CONFIG_PIA_USER)
-				&& pc.hasPluginParameter(PluginConstants.CONFIG_USER)) {
-			String val = pc.getPluginStringParameter(PluginConstants.CONFIG_USER);
-			if (val != null && !val.isEmpty()) {
-				pc.setPluginParameter(CONFIG_PIA_USER, val);
-			}
-		}
-		if (!pc.hasPluginParameter(CONFIG_PIA_P)
-				&& pc.hasPluginParameter(PluginConstants.CONFIG_P)) {
-			byte[] val = pc.getPluginByteParameter(PluginConstants.CONFIG_P);
-			if (val != null && val.length > 0) {
-				pc.setPluginParameter(CONFIG_PIA_P, val);
-			}
-		}
-
 		List<Parameter> params = new ArrayList<>(1);
 		File path = getPIAManagerPath(pi.getUtilities());
 		paramManagerDir = configModel.addDirectoryParameter2(CONFIG_PIA_MANAGER_DIR,
@@ -122,6 +100,26 @@ public class Checker_PIA
 		}
 
 		String[] creds = getDefaultCreds(pi);
+
+		// AirVPN and PIA used to share CONFIG_PIA_USER and CONFIG_PIA_P
+		// Check if old keys are used, and migrate to separate keys
+		PluginConfig pc = pi.getPluginconfig();
+		if (!pc.hasPluginParameter(CONFIG_PIA_USER)
+				&& pc.hasPluginParameter(PluginConstants.CONFIG_USER)
+				&& creds[0].isEmpty()) {
+			String val = pc.getPluginStringParameter(PluginConstants.CONFIG_USER);
+			if (val != null && !val.isEmpty()) {
+				pc.setPluginParameter(CONFIG_PIA_USER, val);
+			}
+		}
+		if (!pc.hasPluginParameter(CONFIG_PIA_P)
+				&& pc.hasPluginParameter(PluginConstants.CONFIG_P)
+				&& creds[1].isEmpty()) {
+			byte[] val = pc.getPluginByteParameter(PluginConstants.CONFIG_P);
+			if (val != null && val.length > 0) {
+				pc.setPluginParameter(CONFIG_PIA_P, val);
+			}
+		}
 
 		paramTryPortRPC = configModel.addBooleanParameter2(CONFIG_PIA_TRY_PORT_RPC,
 				"pia.try.port.rpc", !creds[1].isEmpty());

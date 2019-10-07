@@ -89,21 +89,6 @@ public class UI
 			menuItemShowView.remove();
 			menuItemShowView = null;
 		}
-
-		MultipleDocumentInterface mdi = UIFunctionsManager.getUIFunctions().getMDI();
-		if (mdi == null) {
-			return;
-		}
-
-		mdi.closeEntry(VIEW_ID);
-		// Since we don't have a way to close an entry without removing the 
-		// "open again" flag, manually reset the "open once" flag so the view
-		// opens again when plugin is reloaded/upgraded
-		COConfigurationManager.removeParameter("sb.once." + VIEW_ID);
-		COConfigurationManager.removeParameter("tab.once." + VIEW_ID);
-
-		// Requires 5610
-		mdi.deregisterEntry(VIEW_ID, this);
 	}
 
 	/* (non-Javadoc)
