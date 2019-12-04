@@ -20,6 +20,7 @@ package com.vuze.plugin.azVPN_Helper;
 
 import java.io.*;
 import java.net.*;
+import java.nio.file.Files;
 import java.util.*;
 
 import org.apache.http.NameValuePair;
@@ -195,7 +196,7 @@ public class Checker_PIA
 
 			if (ret[0].isEmpty()) {
 				File fileAccount = new File(pathPIAManagerData, "account.json");
-				if (fileAccount.exists()) {
+				if (fileAccount.exists() && Files.isReadable(fileAccount.toPath())) {
 					settingsText = FileUtil.readFileAsString(fileAccount, -1);
 					mapSettings = JSONUtils.decodeJSON(settingsText);
 					ret[0] = MapUtils.getMapString(mapSettings, "username", "");
@@ -356,7 +357,7 @@ public class Checker_PIA
 		boolean gotValidPort = false;
 
 		File fileStatus = new File(pathPIAManagerData, "status_file.txt");
-		if (!fileStatus.isFile() || !fileStatus.canRead()
+		if (!fileStatus.isFile() || !Files.isReadable(fileStatus.toPath())
 				|| fileStatus.lastModified() < SystemTime.getOffsetTime(
 						-1000L * 60 * 60 * 24 * 14)) {
 			return new Status(STATUS_ID_WARN);
@@ -428,7 +429,7 @@ public class Checker_PIA
 
 		File fileManagerLog = getPIAManagerLogFile(pi.getUtilities());
 		if (fileManagerLog == null || !fileManagerLog.isFile()
-				|| !fileManagerLog.canRead()
+				|| !Files.isReadable(fileManagerLog.toPath())
 				|| fileManagerLog.lastModified() <= SystemTime.getOffsetTime(
 						-1000L * 60 * 60 * 24)) {
 
@@ -574,12 +575,12 @@ public class Checker_PIA
 			if (pathPIAManagerData != null) {
 				// client_id.txt is no longer used.  Check anyway for legacy users
 				File fileClientID = new File(pathPIAManagerData, "client_id.txt");
-				if (fileClientID.isFile() && fileClientID.canRead()) {
+				if (fileClientID.isFile() && Files.isReadable(fileClientID.toPath())) {
 					clientID = FileUtil.readFileAsString(fileClientID, -1);
 				} else {
 					// Newer PIA Manager stores a client id in account.json
 					File fileAccount = new File(pathPIAManagerData, "account.json");
-					if (fileAccount.exists()) {
+					if (fileAccount.exists() && Files.isReadable(fileAccount.toPath())) {
 						String settingsText = FileUtil.readFileAsString(fileAccount, -1);
 						Map<?, ?> mapSettings = JSONUtils.decodeJSON(settingsText);
 						clientID = MapUtils.getMapString(mapSettings, "clientId", null);
@@ -725,10 +726,10 @@ public class Checker_PIA
 	 * @see com.vuze.plugin.azVPN_Helper.CheckerCommon#canReach(java.net.InetAddress)
 	 */
 	@Override
-	protected boolean canReach(InetAddress addressToReach) {
+	protected boolean canReach(InetAddress bindAddress) {
 		try {
 			URI canReachURL = new URI("https://" + VPN_DOMAIN);
-			return canReach(addressToReach, canReachURL);
+			return canReach(bindAddress, canReachURL) || canReach(bindAddress, new URI("https://www.google.com"));
 		} catch (URISyntaxException e) {
 			return false;
 		}

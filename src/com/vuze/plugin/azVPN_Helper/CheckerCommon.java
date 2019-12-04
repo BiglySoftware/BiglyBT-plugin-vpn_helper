@@ -922,7 +922,7 @@ public abstract class CheckerCommon
 
 	protected abstract boolean canReach(InetAddress addressToReach);
 
-	protected boolean canReach(InetAddress addressToReach, URI uri) {
+	protected boolean canReach(InetAddress binrAddress, URI uri) {
 
 		InetAddress[] resolve = null;
 		try {
@@ -942,7 +942,7 @@ public abstract class CheckerCommon
 
 			HttpHead getHead = new HttpHead(uri);
 			RequestConfig requestConfig = RequestConfig.custom().setLocalAddress(
-					addressToReach).setConnectTimeout(12000).build();
+					binrAddress).setConnectTimeout(12000).build();
 			getHead.setConfig(requestConfig);
 
 			CloseableHttpResponse response = HttpClients.createDefault().execute(
@@ -951,7 +951,7 @@ public abstract class CheckerCommon
 			response.close();
 
 		} catch (Throwable t) {
-			PluginVPNHelper.log("Trying to access " + uri + " on " + addressToReach
+			PluginVPNHelper.log("Trying to access " + uri + " on " + binrAddress
 					+ " caused " + t.toString());
 			t.printStackTrace();
 			return false;
