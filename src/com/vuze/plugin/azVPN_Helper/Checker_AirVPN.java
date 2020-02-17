@@ -66,16 +66,15 @@ import com.biglybt.pif.utils.xml.simpleparser.SimpleXMLParserDocumentNode;
  * 
  * https://airvpn.org/
  * 
- * No RPC for port forwarding, so we use https posting and scraping :(
- * 
- * TODO: Port Cycling
  */
+@SuppressWarnings("unused")
 public class Checker_AirVPN
 	extends CheckerCommon
 {
 
 	private static final String VPN_DOMAIN = "airvpn.org";
 
+	/*
 	private static final String VPN_LOGIN_URL = "https://" + VPN_DOMAIN
 			+ "/login";
 
@@ -97,6 +96,7 @@ public class Checker_AirVPN
 	private static final String USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/56.0.2924.87 Safari/537.36";
 
 	private HttpClientContext httpClientContext;
+	*/
 
 	public Checker_AirVPN() {
 		super();
@@ -109,8 +109,10 @@ public class Checker_AirVPN
 	// no groups
 	public static List<Parameter> setupConfigModel(PluginInterface pi,
 			BasicPluginConfigModel configModel) {
-		List<Parameter> params = new ArrayList<Parameter>(1);
+		List<Parameter> params = new ArrayList<>(1);
 
+		params.add(configModel.addLabelParameter2("airvpn.open.port.howto"));
+		/* Website now requires a real browser, can't scrape :(
 		params.add(configModel.addLabelParameter2("airvpn.login.group.explain"));
 		StringParameter paramUser = configModel.addStringParameter2(
 				PluginConstants.CONFIG_USER, "vpnhelper.config.user", "");
@@ -119,6 +121,7 @@ public class Checker_AirVPN
 				PluginConstants.CONFIG_P, "vpnhelper.config.pass",
 				PasswordParameter.ET_PLAIN, new byte[] {});
 		params.add(paramPass);
+	 */
 
 		return params;
 	}
@@ -207,6 +210,7 @@ public class Checker_AirVPN
 
 	@Override
 	protected Status callRPCforPort(InetAddress bindIP, StringBuilder sReply) {
+		/*
 		InetAddress[] resolve = null;
 		try {
 
@@ -460,9 +464,11 @@ public class Checker_AirVPN
 				}
 			}
 		}
+			 */
 		return new Status(STATUS_ID_OK);
 	}
 
+	/*
 	private PortInfo[] createPort(InetAddress bindIP, StringBuffer token,
 			StringBuilder sReply)
 			throws ClientProtocolException, IOException {
@@ -592,6 +598,7 @@ public class Checker_AirVPN
 		});
 		return array;
 	}
+	 */
 
 	protected File getVPNConfigPath() {
 		PlatformManager platformManager = PlatformManagerFactory.getPlatformManager();
