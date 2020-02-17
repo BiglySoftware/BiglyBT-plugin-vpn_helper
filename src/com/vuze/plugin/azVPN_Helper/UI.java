@@ -22,7 +22,16 @@ import java.util.Locale;
 import java.util.MissingResourceException;
 import java.util.ResourceBundle;
 
-import com.biglybt.core.config.COConfigurationManager;
+import com.biglybt.ui.UIFunctionsManager;
+import com.biglybt.ui.common.viewtitleinfo.ViewTitleInfo;
+import com.biglybt.ui.mdi.MdiEntry;
+import com.biglybt.ui.mdi.MdiEntryCreationListener;
+import com.biglybt.ui.mdi.MultipleDocumentInterface;
+import com.biglybt.ui.swt.pif.UISWTInstance;
+import com.biglybt.ui.swt.skin.SWTSkinFactory;
+import com.biglybt.ui.swt.skin.SWTSkinProperties;
+import com.vuze.plugin.azVPN_Helper.CheckerCommon.Status;
+
 import com.biglybt.pif.PluginInterface;
 import com.biglybt.pif.ui.UIInstance;
 import com.biglybt.pif.ui.UIManager;
@@ -30,16 +39,6 @@ import com.biglybt.pif.ui.menus.MenuItem;
 import com.biglybt.pif.ui.menus.MenuItemListener;
 import com.biglybt.pif.ui.menus.MenuManager;
 import com.biglybt.pif.utils.LocaleUtilities;
-import com.biglybt.ui.swt.pif.UISWTInstance;
-
-import com.biglybt.ui.UIFunctionsManager;
-import com.biglybt.ui.common.viewtitleinfo.ViewTitleInfo;
-import com.biglybt.ui.mdi.MdiEntry;
-import com.biglybt.ui.mdi.MdiEntryCreationListener;
-import com.biglybt.ui.mdi.MultipleDocumentInterface;
-import com.biglybt.ui.swt.skin.SWTSkinFactory;
-import com.biglybt.ui.swt.skin.SWTSkinProperties;
-import com.vuze.plugin.azVPN_Helper.CheckerCommon.Status;
 
 public class UI
 	implements MdiEntryCreationListener, CheckerListener
@@ -126,7 +125,8 @@ public class UI
 					String indicatorTooltipKey = status.getIndicatorTooltipKey();
 					if (indicatorTooltipKey != null
 							&& (texts.hasLocalisedMessageText(indicatorTooltipKey)
-									|| indicatorTooltipKey.startsWith("!"))) {
+									|| (indicatorTooltipKey.startsWith("!")
+											&& indicatorTooltipKey.endsWith("!")))) {
 						return texts.getLocalisedMessageText(indicatorTooltipKey);
 					}
 					return null;

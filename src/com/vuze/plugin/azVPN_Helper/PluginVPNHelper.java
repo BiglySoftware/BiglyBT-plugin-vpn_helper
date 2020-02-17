@@ -333,7 +333,6 @@ public class PluginVPNHelper
 				PluginConstants.CONFIG_PORT_READ_LOCATION, "");
 		paramPortReadLocation.setMinimumRequiredUserMode(
 				StringParameter.MODE_INTERMEDIATE);
-		paramDoPortForwarding.addEnabledOnSelection(paramPortReadLocation);
 
 		StringParameter paramPortReadLocationRegEx = configModel.addStringParameter2(
 				PluginConstants.CONFIG_PORT_READ_LOCATION_REGEX,
@@ -341,6 +340,9 @@ public class PluginVPNHelper
 				"[^0-9]*([0-9]{3,5})[^0-9]?");
 		paramPortReadLocationRegEx.setMinimumRequiredUserMode(
 				StringParameter.MODE_INTERMEDIATE);
+
+		ParameterGroup paramGroupPRL = configModel.createGroup(null, paramPortReadLocation, paramPortReadLocationRegEx);
+		paramDoPortForwarding.addEnabledOnSelection(paramGroupPRL);
 
 		paramPortReadLocation.addListener(param -> {
 			String value = ((DirectoryParameter) param).getValue();

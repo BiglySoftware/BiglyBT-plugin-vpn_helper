@@ -35,14 +35,14 @@ import org.apache.http.message.BasicNameValuePair;
 
 import com.biglybt.core.proxy.AEProxySelector;
 import com.biglybt.core.proxy.AEProxySelectorFactory;
-import com.biglybt.core.util.FileUtil;
-import com.biglybt.core.util.RandomUtils;
-import com.biglybt.core.util.SystemTime;
+import com.biglybt.core.util.*;
 import com.biglybt.util.JSONUtils;
 import com.biglybt.util.MapUtils;
 
 import com.biglybt.pif.PluginConfig;
 import com.biglybt.pif.PluginInterface;
+import com.biglybt.pif.config.ConfigParameter;
+import com.biglybt.pif.config.ConfigParameterListener;
 import com.biglybt.pif.ui.config.*;
 import com.biglybt.pif.ui.model.BasicPluginConfigModel;
 import com.biglybt.pif.utils.LocaleUtilities;
@@ -59,6 +59,7 @@ import com.biglybt.pif.utils.Utilities;
 @SuppressWarnings("unused")
 public class Checker_PIA
 	extends CheckerCommon
+	implements ConfigParameterListener
 {
 	public static final String CONFIG_PIA_MANAGER_DIR = "pia_manager.dir";
 
@@ -67,6 +68,8 @@ public class Checker_PIA
 	public static final String CONFIG_PIA_USER = "pia_user";
 
 	private static final String CONFIG_PIA_TRY_PORT_RPC = "pia_try.port.rpc";
+
+	private static final String CONFIG_PIA_USE_CLI = "pia.use.cli";
 
 	// Is it always 70000? who knows
 	private static final int STATUS_FILE_PORT_INDEX = 70000;
@@ -80,9 +83,18 @@ public class Checker_PIA
 
 	private static BooleanParameter paramTryPortRPC;
 
+	private static BooleanParameter paramUseCLI;
+
+	private Process cliProcess;
+
+	private String lastCLIPortStatus = "";
+
+	private boolean lastCLIPortStatusIsPort = false;
+
 	public Checker_PIA(PluginInterface pi) {
 		super(pi);
 		setMinSubnetMaskBitCount(30);
+		paramUseCLI.addConfigParameterListener(this);
 	}
 
 	public static List<Parameter> setupConfigModel(PluginInterface pi,
@@ -122,9 +134,13 @@ public class Checker_PIA
 			}
 		}
 
+		paramUseCLI = configModel.addBooleanParameter2(CONFIG_PIA_USE_CLI,
+				CONFIG_PIA_USE_CLI, true);
+		params.add(paramUseCLI);
+
 		paramTryPortRPC = configModel.addBooleanParameter2(CONFIG_PIA_TRY_PORT_RPC,
 				"pia.try.port.rpc", !creds[1].isEmpty());
-		paramTryPortRPC.setSuffixLabelKey("pia.try.port.rpc.info");
+		//paramTryPortRPC.setSuffixLabelKey("pia.try.port.rpc.info");
 		params.add(paramTryPortRPC);
 
 		StringParameter paramUser = configModel.addStringParameter2(CONFIG_PIA_USER,
@@ -139,6 +155,111 @@ public class Checker_PIA
 		paramTryPortRPC.addEnabledOnSelection(paramPass);
 
 		return params;
+	}
+
+	private Status getCLIStatus() {
+		Status status = new Status(
+				lastCLIPortStatusIsPort ? STATUS_ID_OK : STATUS_ID_WARN);
+		if (lastCLIPortStatus.equalsIgnoreCase("Unavailable")) {
+			status.indicatorID = "vpnhelper.indicator.noport";
+		} else {
+			status.indicatorTooltipID = "!"
+					+ texts.getLocalisedMessageText("pia.cli.port.status", new String[] {
+						lastCLIPortStatus
+					}) + "!";
+		}
+		return status;
+	}
+
+	private Status setupCLI(StringBuilder sbReply) {
+		if (cliProcess != null && cliProcess.isAlive()) {
+			addReply(sbReply, CHAR_GOOD, "pia.cli.running", lastCLIPortStatus);
+			return getCLIStatus();
+		}
+
+		Utilities utils = pi.getUtilities();
+		File piaManagerBinPath = getPIAManagerBinPath(utils);
+		if (piaManagerBinPath == null) {
+			addReply(sbReply, CHAR_BAD, "pia.cli.not.found", "");
+			Status status = new Status(STATUS_ID_WARN);
+			status.indicatorTooltipID = "!"
+					+ texts.getLocalisedMessageText("pia.cli.not.found", new String[] {
+						""
+					}) + "!";
+			return status;
+		}
+		File fileCLI = new File(piaManagerBinPath,
+				utils.isWindows() ? "piactl.exe" : "piactl");
+		if (!fileCLI.exists()) {
+			addReply(sbReply, CHAR_BAD, "pia.cli.not.found", fileCLI.toString());
+			Status status = new Status(STATUS_ID_WARN);
+			status.indicatorTooltipID = "!"
+					+ texts.getLocalisedMessageText("pia.cli.not.found", new String[] {
+						fileCLI.toString()
+					}) + "!";
+			return status;
+		}
+		try {
+			cliProcess = Runtime.getRuntime().exec(new String[] {
+				fileCLI.getAbsolutePath(),
+				"monitor",
+				"portforward"
+			});
+
+			InputStream stdOut = cliProcess.getInputStream();
+			final BufferedReader brStdOut = new BufferedReader(
+					new InputStreamReader(stdOut));
+
+			Thread stdOutReader = new Thread("piactl monitor") {
+				@Override
+				public void run() {
+					try {
+						String line;
+						while ((line = brStdOut.readLine()) != null) {
+							processCLI(line);
+						}
+					} catch (Exception e) {
+						e.printStackTrace();
+					}
+				};
+			};
+			stdOutReader.setDaemon(true);
+			stdOutReader.start();
+
+			// process immediately sends current status. Wait a few ms to be sure
+			// we get it.
+			try {
+				Thread.sleep(250);
+			} catch (InterruptedException e) {
+			}
+
+			addReply(sbReply, CHAR_GOOD, "pia.cli.startup", fileCLI.getAbsolutePath(),
+					lastCLIPortStatus);
+
+			return getCLIStatus();
+		} catch (IOException e) {
+			addReply(sbReply, CHAR_GOOD, "pia.cli.error",
+					Debug.getNestedExceptionMessage(e));
+			e.printStackTrace();
+		}
+
+		return null;
+	}
+
+	private void processCLI(String line) {
+		lastCLIPortStatus = line;
+		lastCLIPortStatusIsPort = line.matches("[0-9]+");
+		if (lastCLIPortStatusIsPort) {
+			try {
+				int newPort = Integer.parseInt(line);
+				StringBuilder sb = new StringBuilder();
+				changePort(newPort, sb);
+			} catch (Throwable t) {
+				PluginVPNHelper.log(Debug.getNestedExceptionMessageAndStack(t));
+				lastCLIPortStatusIsPort = false;
+			}
+		}
+		portBindingCheck();
 	}
 
 	private static File getPIAManagerDataPath(Utilities utils) {
@@ -259,6 +380,25 @@ public class Checker_PIA
 			return oldLogFile;
 		}
 		return fileManagerLog;
+	}
+
+	private static File getPIAManagerBinPath(Utilities utils) {
+		File piaManagerPath;
+		if (utils.isWindows()) {
+			piaManagerPath = getPIAManagerPath(utils);
+		} else if (utils.isOSX()) {
+			return new File(
+					"/Applications/Private Internet Access.app/Contents/MacOS");
+		} else {
+			piaManagerPath = getPIAManagerPath(utils);
+			if (piaManagerPath != null && piaManagerPath.isDirectory()) {
+				return new File(piaManagerPath, "bin");
+			}
+		}
+		if (piaManagerPath != null && piaManagerPath.isDirectory()) {
+			return piaManagerPath;
+		}
+		return null;
 	}
 
 	private static File getPIAManagerPath(Utilities utils) {
@@ -700,6 +840,14 @@ public class Checker_PIA
 	protected Status callRPCforPort(InetAddress vpnIP, StringBuilder sReply) {
 
 		Status rpcStatus = null;
+
+		if (paramUseCLI.getValue()) {
+			Status cliStatus = setupCLI(sReply);
+			if (cliStatus != null) {
+				return cliStatus;
+			}
+		}
+
 		if (paramTryPortRPC.getValue()) {
 			rpcStatus = getPort(vpnIP, sReply);
 			if (rpcStatus.statusID == STATUS_ID_OK) {
@@ -729,10 +877,33 @@ public class Checker_PIA
 	protected boolean canReach(InetAddress bindAddress) {
 		try {
 			URI canReachURL = new URI("https://" + VPN_DOMAIN);
-			return canReach(bindAddress, canReachURL) || canReach(bindAddress, new URI("https://www.google.com"));
+			return canReach(bindAddress, new URI("https://www.google.com"))
+					|| canReach(bindAddress, canReachURL);
 		} catch (URISyntaxException e) {
 			return false;
 		}
 	}
 
+	@Override
+	public void destroy() {
+		super.destroy();
+		if (cliProcess != null) {
+			cliProcess.destroy();
+			cliProcess = null;
+		}
+		paramUseCLI.removeConfigParameterListener(this);
+	}
+
+	@Override
+	public void configParameterChanged(ConfigParameter param) {
+		if (paramUseCLI.getValue()) {
+			// Will eventually run setupCLI
+			portBindingCheck();
+		} else {
+			if (cliProcess != null) {
+				cliProcess.destroy();
+				cliProcess = null;
+			}
+		}
+	}
 }
