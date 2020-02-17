@@ -38,10 +38,7 @@ import com.biglybt.core.CoreFactory;
 import com.biglybt.core.networkmanager.admin.*;
 import com.biglybt.core.proxy.AEProxySelector;
 import com.biglybt.core.proxy.AEProxySelectorFactory;
-import com.biglybt.core.util.AESemaphore;
-import com.biglybt.core.util.Debug;
-import com.biglybt.core.util.FileUtil;
-import com.biglybt.core.util.NetUtils;
+import com.biglybt.core.util.*;
 import com.biglybt.net.udp.uc.PRUDPPacketHandler;
 import com.biglybt.net.udp.uc.PRUDPPacketHandlerFactory;
 import com.biglybt.net.udp.uc.PRUDPReleasablePacketHandler;
@@ -942,7 +939,8 @@ public abstract class CheckerCommon
 
 			HttpHead getHead = new HttpHead(uri);
 			RequestConfig requestConfig = RequestConfig.custom().setLocalAddress(
-					binrAddress).setConnectTimeout(12000).build();
+					binrAddress).setConnectionRequestTimeout(6000).setConnectTimeout(
+							12000).build();
 			getHead.setConfig(requestConfig);
 
 			CloseableHttpResponse response = HttpClients.createDefault().execute(
