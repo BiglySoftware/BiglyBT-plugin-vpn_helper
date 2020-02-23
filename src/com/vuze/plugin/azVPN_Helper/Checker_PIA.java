@@ -264,6 +264,7 @@ public class Checker_PIA
 	}
 
 	private void processCLI(String line) {
+		PluginVPNHelper.log("piactl monitor portforward returned " + line);
 		lastCLIPortStatus = line;
 		lastCLIPortStatusIsPort = line.matches("[0-9]+");
 		if (lastCLIPortStatusIsPort) {
@@ -870,6 +871,10 @@ public class Checker_PIA
 			if (cliStatus != null) {
 				return cliStatus;
 			}
+		}
+
+		if (vpnIP == null) {
+			return null;
 		}
 
 		if (paramTryPortRPC.getValue()) {

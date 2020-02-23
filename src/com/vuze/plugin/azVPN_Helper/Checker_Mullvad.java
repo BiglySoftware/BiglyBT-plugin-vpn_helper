@@ -94,6 +94,9 @@ public class Checker_Mullvad
 
 	@Override
 	protected Status callRPCforPort(InetAddress bindIP, StringBuilder sReply) {
+		if (bindIP == null) {
+			return null;
+		}
 		String id = config.getPluginStringParameter(CONFIG_MULLVAD_ACCOUNT);
 		if (id == null || id.length() == 0) {
 			// It's possible the user started Vuze before getting an account id,

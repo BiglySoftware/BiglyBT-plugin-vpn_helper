@@ -779,12 +779,9 @@ public abstract class CheckerCommon
 				}
 
 				if (callRPC) {
-					Status rpcCallResult = null;
-					if (newStatus.statusID != STATUS_ID_BAD && vpnIP != null) {
-						rpcCallResult = callRPCforPort(vpnIP, sReply);
-					}
-
-					if (rpcCallResult != null) {
+					Status rpcCallResult = callRPCforPort(vpnIP, sReply);
+					if (rpcCallResult != null && newStatus.statusID != STATUS_ID_BAD
+							&& vpnIP != null) {
 						newStatus = rpcCallResult;
 
 						if (newStatus.statusID == STATUS_ID_WARN) {
