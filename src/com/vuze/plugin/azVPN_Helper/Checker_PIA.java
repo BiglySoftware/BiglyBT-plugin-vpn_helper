@@ -50,13 +50,19 @@ import com.biglybt.pif.utils.Utilities;
 
 /**
  * Private Internet Access VPN
+ * <br/>
  * https://www.privateinternetaccess.com
- *
+ * <p/>
  * RPC Specs from their forum.
- *
+ * <p/>
+ * CLI Specs from https://www.privateinternetaccess.com/helpdesk/kb/articles/pia-desktop-command-line-interface
+ * <p/>
  * Only one Port, so port cycling is not an option.
  */
-@SuppressWarnings("unused")
+@SuppressWarnings({
+	"unused",
+	"DuplicateStringLiteralInspection"
+})
 public class Checker_PIA
 	extends CheckerCommon
 	implements ConfigParameterListener
@@ -86,6 +92,8 @@ public class Checker_PIA
 	private static BooleanParameter paramUseCLI;
 
 	private Process cliProcess;
+
+	private final Object cliProcessLock = new Object();
 
 	private String lastCLIPortStatus = "";
 
@@ -172,9 +180,11 @@ public class Checker_PIA
 	}
 
 	private Status setupCLI(StringBuilder sbReply) {
-		if (cliProcess != null && cliProcess.isAlive()) {
-			addReply(sbReply, CHAR_GOOD, "pia.cli.running", lastCLIPortStatus);
-			return getCLIStatus();
+		synchronized (cliProcessLock) {
+			if (cliProcess != null && cliProcess.isAlive()) {
+				addReply(sbReply, CHAR_GOOD, "pia.cli.running", lastCLIPortStatus);
+				return getCLIStatus();
+			}
 		}
 
 		Utilities utils = pi.getUtilities();
@@ -200,31 +210,38 @@ public class Checker_PIA
 			return status;
 		}
 		try {
-			cliProcess = Runtime.getRuntime().exec(new String[] {
-				fileCLI.getAbsolutePath(),
-				"monitor",
-				"portforward"
-			});
+			synchronized (cliProcessLock) {
+				cliProcess = Runtime.getRuntime().exec(new String[] {
+					fileCLI.getAbsolutePath(),
+					"monitor",
+					"portforward"
+				});
 
-			InputStream stdOut = cliProcess.getInputStream();
-			final BufferedReader brStdOut = new BufferedReader(
-					new InputStreamReader(stdOut));
+				BufferedReader brIS = new BufferedReader(
+						new InputStreamReader(cliProcess.getInputStream()));
 
-			Thread stdOutReader = new Thread("piactl monitor") {
-				@Override
-				public void run() {
+				Thread stdOutReader = new Thread(() -> {
 					try {
 						String line;
-						while ((line = brStdOut.readLine()) != null) {
+						while ((line = brIS.readLine()) != null) {
 							processCLI(line);
 						}
 					} catch (Exception e) {
+						PluginVPNHelper.log(
+								"piactl monitor error: " + Debug.getNestedExceptionMessage(e));
 						e.printStackTrace();
 					}
-				};
-			};
-			stdOutReader.setDaemon(true);
-			stdOutReader.start();
+
+					// Restart if needed
+					synchronized (cliProcessLock) {
+						if (cliProcess != null && !cliProcess.isAlive()) {
+							portBindingCheck();
+						}
+					}
+				}, "piactl monitor");
+				stdOutReader.setDaemon(true);
+				stdOutReader.start();
+			}
 
 			// process immediately sends current status. Wait a few ms to be sure
 			// we get it.
@@ -333,7 +350,7 @@ public class Checker_PIA
 	}
 
 	// Transform for old PIA manager
-	private static String transform(String s) {
+	private static String transform(CharSequence s) {
 		String PW_KEY = "GN\\\\Lqnw-xc]=jQ}fTyN[Y|x5Db-FET?&)T\\#{f@6qK3q>C?[9z.1u.o0;+-Hf^7^MfRBmvAJ@zZu:-aQeAr.$h0u2y{iy/5<0A`)KZQ8vcP'vVm3DS@{_{y.i";
 
 		StringBuilder result = new StringBuilder();
@@ -555,6 +572,11 @@ public class Checker_PIA
 		return new Status(gotValidPort ? STATUS_ID_OK : STATUS_ID_WARN);
 	}
 
+	/**
+	 * Search Log files for port number
+	 * <p/>
+	 * This is for very old PIA Manager versions and will be removed in the future
+	 */
 	private boolean searchLogForPort(StringBuilder sReply) {
 		// Old PIA manager had a "nolog" file when logging was off
 		String pathPIAManager = paramManagerDir.getValue();
@@ -574,7 +596,8 @@ public class Checker_PIA
 						-1000L * 60 * 60 * 24)) {
 
 			if (pi.getUtilities().isUnix()) {
-				if (!new File(fileManagerLog.getParentFile(), "debug.txt").isFile()) {
+				if (fileManagerLog == null || !new File(fileManagerLog.getParentFile(),
+						"debug.txt").isFile()) {
 					addReply(sReply, CHAR_WARN, "pia.no.logging");
 				}
 			} else {
@@ -594,6 +617,7 @@ public class Checker_PIA
 			fis = new FileInputStream(fileManagerLog);
 			long skip = fileManagerLog.length() - (1024 * 128);
 			if (skip > 0) {
+				//noinspection ResultOfMethodCallIgnored
 				fis.skip(skip);
 			}
 			String tail = FileUtil.readInputStreamAsString(fis, -1, "utf8");
@@ -607,7 +631,7 @@ public class Checker_PIA
 				}
 				if (end >= 1) {
 					String json = tail.substring(start, end);
-					Map map = JSONUtils.decodeJSON(json);
+					Map<?, ?> map = JSONUtils.decodeJSON(json);
 					Object o = MapUtils.getMapMap(map, "forwarded_port",
 							Collections.EMPTY_MAP).get("single");
 					if (o instanceof Number) {
@@ -627,13 +651,13 @@ public class Checker_PIA
 						Boolean supportsForwarding = null;
 						String regionName = null;
 						String ourRegion = (String) o;
-						List listRegions = MapUtils.getMapList(map, "regions",
+						List<?> listRegions = MapUtils.getMapList(map, "regions",
 								Collections.emptyList());
 						for (Object oRegion : listRegions) {
 							if (!(oRegion instanceof Map)) {
 								continue;
 							}
-							Map mapRegion = (Map) oRegion;
+							Map<?, ?> mapRegion = (Map<?, ?>) oRegion;
 							String regionCode = MapUtils.getMapString(mapRegion,
 									"region_code", null);
 							if (ourRegion.equals(regionCode)) {
@@ -887,9 +911,11 @@ public class Checker_PIA
 	@Override
 	public void destroy() {
 		super.destroy();
-		if (cliProcess != null) {
-			cliProcess.destroy();
-			cliProcess = null;
+		synchronized (cliProcessLock) {
+			if (cliProcess != null) {
+				cliProcess.destroy();
+				cliProcess = null;
+			}
 		}
 		paramUseCLI.removeConfigParameterListener(this);
 	}
@@ -900,9 +926,11 @@ public class Checker_PIA
 			// Will eventually run setupCLI
 			portBindingCheck();
 		} else {
-			if (cliProcess != null) {
-				cliProcess.destroy();
-				cliProcess = null;
+			synchronized (cliProcessLock) {
+				if (cliProcess != null) {
+					cliProcess.destroy();
+					cliProcess = null;
+				}
 			}
 		}
 	}
