@@ -414,6 +414,10 @@ public class PluginVPNHelper
 	 */
 	@Override
 	public void closedownInitiated() {
+		if (checker != null) {
+			checker.destroy();
+			checker = null;
+		}
 	}
 
 	/* (non-Javadoc)
