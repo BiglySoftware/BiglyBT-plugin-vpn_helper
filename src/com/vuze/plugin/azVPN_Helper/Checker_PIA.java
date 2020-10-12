@@ -102,7 +102,7 @@ public class Checker_PIA
 
 	public Checker_PIA(PluginInterface pi) {
 		super(pi);
-		setMinSubnetMaskBitCount(30);
+		setMinSubnetMaskBitCount(24);
 		paramUseCLI.addConfigParameterListener(this);
 	}
 
