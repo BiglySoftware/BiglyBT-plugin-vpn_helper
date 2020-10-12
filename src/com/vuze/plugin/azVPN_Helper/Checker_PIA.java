@@ -46,6 +46,7 @@ import com.biglybt.pif.config.ConfigParameterListener;
 import com.biglybt.pif.ui.config.*;
 import com.biglybt.pif.ui.model.BasicPluginConfigModel;
 import com.biglybt.pif.utils.LocaleUtilities;
+import com.biglybt.pif.utils.UTTimer;
 import com.biglybt.pif.utils.Utilities;
 
 /**
@@ -270,8 +271,12 @@ public class Checker_PIA
 		if (lastCLIPortStatusIsPort) {
 			try {
 				int newPort = Integer.parseInt(line);
-				StringBuilder sb = new StringBuilder();
-				changePort(newPort, sb);
+				UTTimer timer = pi.getUtilities().createTimer("PIA_Port");
+				timer.addEvent(System.currentTimeMillis() + 2000, event -> {
+					portBindingCheck();
+					changePort(newPort, new StringBuilder());
+				});
+				return;
 			} catch (Throwable t) {
 				PluginVPNHelper.log(Debug.getNestedExceptionMessageAndStack(t));
 				lastCLIPortStatusIsPort = false;
