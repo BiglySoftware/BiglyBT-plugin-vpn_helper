@@ -18,24 +18,31 @@
 
 package com.vuze.plugin.azVPN_Helper;
 
-import java.io.*;
-import java.net.*;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
+import java.io.File;
+import java.io.IOException;
+import java.net.InetAddress;
+import java.net.URI;
+import java.net.URISyntaxException;
+import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+
+import org.apache.http.client.config.RequestConfig;
+import org.apache.http.client.methods.CloseableHttpResponse;
+import org.apache.http.client.methods.HttpGet;
+import org.apache.http.impl.client.CloseableHttpClient;
+import org.apache.http.impl.client.HttpClients;
 
 import com.biglybt.core.util.Constants;
 import com.biglybt.core.util.FileUtil;
 import com.biglybt.core.util.SystemProperties;
+import com.biglybt.util.JSONUtils;
+import com.biglybt.util.MapUtils;
+
 import com.biglybt.pif.PluginInterface;
 import com.biglybt.pif.ui.config.Parameter;
 import com.biglybt.pif.ui.config.StringParameter;
 import com.biglybt.pif.ui.model.BasicPluginConfigModel;
-
-import com.biglybt.core.proxy.AEProxySelector;
-import com.biglybt.core.proxy.AEProxySelectorFactory;
 
 /**
  * Mullvad VPN
@@ -49,10 +56,6 @@ import com.biglybt.core.proxy.AEProxySelectorFactory;
 public class Checker_Mullvad
 	extends CheckerCommon
 {
-	private static final int RPC_PORT = 51678;
-
-	private static final String RPC_DOMAIN = "master.mullvad.net";
-
 	private static final String CONFIG_MULLVAD_ACCOUNT = "mullvad.account.id";
 
 	public Checker_Mullvad(PluginInterface pi) {
@@ -61,7 +64,7 @@ public class Checker_Mullvad
 
 	public static List<Parameter> setupConfigModel(PluginInterface pi,
 			BasicPluginConfigModel configModel) {
-		List<Parameter> params = new ArrayList<Parameter>(1);
+		List<Parameter> params = new ArrayList<>(1);
 		StringParameter paramAccount = configModel.addStringParameter2(
 				CONFIG_MULLVAD_ACCOUNT, CONFIG_MULLVAD_ACCOUNT, getAccountID());
 		params.add(paramAccount);
@@ -83,8 +86,7 @@ public class Checker_Mullvad
 					Pattern.MULTILINE);
 			Matcher matcher = pattern.matcher(settings);
 			if (matcher.find()) {
-				String id = matcher.group(1);
-				return id;
+				return matcher.group(1);
 			}
 		} catch (IOException e) {
 		}
@@ -108,132 +110,61 @@ public class Checker_Mullvad
 			}
 		}
 
-		InetAddress[] resolve = null;
 		try {
 			boolean gotPort = false;
 
-			Socket soc = new Socket(RPC_DOMAIN, RPC_PORT);
-			BufferedReader br = new BufferedReader(
-					new InputStreamReader(soc.getInputStream()));
-			BufferedWriter bw = new BufferedWriter(
-					new OutputStreamWriter(soc.getOutputStream()));
+			HttpGet getLoginPage = new HttpGet(
+					"https://api.mullvad.net/www/accounts/" + id + "/");
+			RequestConfig requestConfig = RequestConfig.custom().setLocalAddress(
+					vpnIP).setConnectTimeout(15000).build();
+			getLoginPage.setConfig(requestConfig);
 
-			sendCommand(br, bw, "version%51%");
-			String[] answer = sendCommand(br, bw, "forward port%" + id + "%");
+			CloseableHttpClient httpClientLoginPage = HttpClients.createDefault();
+			CloseableHttpResponse loginPageResponse = httpClientLoginPage.execute(
+					getLoginPage);
 
-			soc.close();
+			String s = FileUtil.readInputStreamAsString(
+					loginPageResponse.getEntity().getContent(), -1, "utf8");
 
-			if (answer != null) {
-				if (answer.length > 1) {
-					int port = Integer.parseInt(answer[1]);
+			if (s.startsWith("{")) {
+				Map map = JSONUtils.decodeJSON(s);
+				// There's a "auth_token" key that we might be able to use to login
+				// to the website and add a port ourselves
+				// There's also a "active" key that we could check and report if VPN expired
+				Map mapAccount = MapUtils.getMapMap(map, "account",
+						Collections.emptyMap());
+				List listPorts = MapUtils.getMapList(mapAccount, "ports",
+						Collections.emptyList());
+
+				if (listPorts.size() == 0) {
+					addReply(sReply, CHAR_WARN, "mullvad.no.port.created", s);
+					return new Status(STATUS_ID_WARN, "vpnhelper.indicator.noport");
+				}
+
+				Object portObj = listPorts.get(0);
+				if (portObj instanceof Number) {
+					int port = ((Number) portObj).intValue();
 					gotPort = true;
 
-					addReply(sReply, CHAR_GOOD, "vpnhelper.port.from.rpc", new String[] {
-						Integer.toString(port)
-					});
-
+					addReply(sReply, CHAR_GOOD, "vpnhelper.port.from.rpc",
+							Integer.toString(port));
 					changePort(port, sReply);
-				} else if (answer.length == 1) {
-					int addPort = addPort(id);
-					if (addPort > 0) {
-						gotPort = true;
-
-						addReply(sReply, CHAR_GOOD, "vpnhelper.port.from.rpc",
-								new String[] {
-									Integer.toString(addPort)
-						});
-
-						changePort(addPort, sReply);
-					}
 				}
 			}
 
 			if (!gotPort) {
-				addReply(sReply, CHAR_WARN, "vpnhelper.rpc.bad", new String[] {
-					answer.toString()
-				});
+				addReply(sReply, CHAR_WARN, "vpnhelper.rpc.bad", s);
 
 				return new Status(STATUS_ID_WARN);
 			}
-		} catch (Exception e) {
-			e.printStackTrace();
-			addReply(sReply, CHAR_BAD, "vpnhelper.rpc.no.connect", new String[] {
-				bindIP + ": " + e.getMessage()
-			});
+		} catch (Throwable t) {
+			t.printStackTrace();
+			addReply(sReply, CHAR_BAD, "vpnhelper.rpc.no.connect",
+					bindIP + ": " + t.getMessage());
 
 			return new Status(STATUS_ID_WARN);
-		} finally {
-			AEProxySelector selector = AEProxySelectorFactory.getSelector();
-			if (selector != null && resolve != null) {
-				for (InetAddress address : resolve) {
-					AEProxySelectorFactory.getSelector().removeProxy(
-							new InetSocketAddress(address, 443));
-				}
-			}
 		}
 		return new Status(STATUS_ID_OK);
-	}
-
-	private int addPort(String id)
-			throws UnknownHostException, IOException {
-		Socket soc = new Socket(RPC_DOMAIN, RPC_PORT);
-		BufferedReader br = new BufferedReader(
-				new InputStreamReader(soc.getInputStream()));
-		BufferedWriter bw = new BufferedWriter(
-				new OutputStreamWriter(soc.getOutputStream()));
-
-		sendCommand(br, bw, "version%51%");
-		String[] answer = sendCommand(br, bw, "new port%" + id + "%");
-
-		soc.close();
-
-		PluginVPNHelper.log("Added a port. " + Arrays.toString(answer));
-
-		if (answer != null && answer.length > 1) {
-			return Integer.parseInt(answer[1]);
-		}
-
-		return -1;
-	}
-
-	public String[] sendCommand(BufferedReader br, BufferedWriter bw,
-			String command)
-					throws IOException {
-
-		String data = String.format("%08X", command.length());
-
-		bw.write(data);
-		bw.write(command);
-		bw.flush();
-
-		StringBuilder answer = new StringBuilder();
-
-		char[] c = new char[256];
-		int read;
-		do {
-
-			read = br.read(c);
-
-			if (read > 0) {
-				answer.append(c, 0, read);
-
-				if (answer.length() >= 8) {
-					int dataLength = Integer.parseInt(answer.substring(0, 8), 16);
-					if (answer.length() >= dataLength + 8) {
-						break;
-					}
-				}
-			}
-		} while (read >= 0);
-
-		if (answer.length() > 8) {
-			if (answer.length() > 8) {
-				String[] split = answer.substring(8).split("%");
-				return split;
-			}
-		}
-
-		return null;
 	}
 
 	/* (non-Javadoc)
@@ -256,8 +187,7 @@ public class Checker_Mullvad
 		if (Constants.isWindows) {
 			appData = SystemProperties.getEnvironmentalVariable("LOCALAPPDATA");
 
-			if (appData != null && appData.length() > 0) {
-			} else {
+			if (appData == null || appData.length() <= 0) {
 				appData = userhome + SystemProperties.SEP + "Application Data";
 			}
 
