@@ -969,20 +969,24 @@ public abstract class CheckerCommon
 	public int getNetworkPrefixLength(NetworkInterface networkInterface,
 			InetAddress address) {
 		int networkPrefixLength = -1;
-		List<InterfaceAddress> interfaceAddresses = networkInterface.getInterfaceAddresses();
-		for (InterfaceAddress interfaceAddress : interfaceAddresses) {
-			if (!interfaceAddress.getAddress().equals(address)) {
-				continue;
+		try{
+			List<InterfaceAddress> interfaceAddresses = networkInterface.getInterfaceAddresses();
+			for (InterfaceAddress interfaceAddress : interfaceAddresses) {
+				if (!interfaceAddress.getAddress().equals(address)) {
+					continue;
+				}
+				networkPrefixLength = interfaceAddress.getNetworkPrefixLength();
+				// JDK-7107883 : getNetworkPrefixLength() does not return correct prefix length
+				// networkPrefixLength will be zero on Java <= 7 when there is no
+				// Broadcast address.
+				// I'm guessing there is no broadcast address returned when mask is 32
+				// on linux, but I can't confirm (I've seen it though)
+				if (networkPrefixLength == 0 && interfaceAddress.getBroadcast() == null) {
+					networkPrefixLength = 32;
+				}
 			}
-			networkPrefixLength = interfaceAddress.getNetworkPrefixLength();
-			// JDK-7107883 : getNetworkPrefixLength() does not return correct prefix length
-			// networkPrefixLength will be zero on Java <= 7 when there is no
-			// Broadcast address.
-			// I'm guessing there is no broadcast address returned when mask is 32
-			// on linux, but I can't confirm (I've seen it though)
-			if (networkPrefixLength == 0 && interfaceAddress.getBroadcast() == null) {
-				networkPrefixLength = 32;
-			}
+		}catch( Throwable e ){
+			// ignore, we get an NPE in networkInterface.getInterfaceAddresses() sometimes it seems
 		}
 		return networkPrefixLength;
 	}
