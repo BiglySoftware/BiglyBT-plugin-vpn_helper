@@ -94,9 +94,16 @@ public class SBC_VPNHelper
 				Utils.getOffOfSWTThread(new AERunnable() {
 					@Override
 					public void runSupport() {
-						PluginVPNHelper.instance.checker.calcProtocolAddresses();
-						btnAddresses.setDisabled(false);
-						soAddresses.switchSuffix(null);
+						try{
+							CheckerCommon checker = PluginVPNHelper.instance.checker;
+							
+							if ( checker != null ){
+								checker.calcProtocolAddresses();
+							}
+						}finally{
+							btnAddresses.setDisabled(false);
+							soAddresses.switchSuffix(null);
+						}
 					}
 				});
 			}

@@ -88,6 +88,15 @@ public class UI
 			menuItemShowView.remove();
 			menuItemShowView = null;
 		}
+		
+		MultipleDocumentInterface mdi = UIFunctionsManager.getUIFunctions().getMDI();
+
+		mdi.deregisterEntry(VIEW_ID, this);
+		
+		if ( mdiEntry != null ){
+			mdi.closeEntry(mdiEntry, false);
+			mdiEntry = null;
+		}
 	}
 
 	/* (non-Javadoc)
