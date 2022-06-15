@@ -53,6 +53,7 @@ public class PluginVPNHelper
 		"AirVPN",
 		"PIA",
 		"Mullvad",
+		"PureVPN",
 		""
 	};
 
