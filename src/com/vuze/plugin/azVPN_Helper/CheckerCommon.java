@@ -434,11 +434,18 @@ public abstract class CheckerCommon
 			// Check if default routing goes through 10.*, by connecting to address
 			// via socket.  Address doesn't need to be reachable, just routable.
 			// This works on Windows, but on Mac returns a wildcard address
+			
 			DatagramSocket socket = new DatagramSocket();
-			try {
-				socket.connect(testSocketAddress, 0);
+			
+			try{
+				socket.connect(testSocketAddress, 32000 );
+				
 				localAddress = socket.getLocalAddress();
-			} finally {
+				
+			}catch( Throwable e ){
+				
+			}finally{
+				
 				socket.close();
 			}
 
